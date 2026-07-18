@@ -29,7 +29,7 @@ RUN apk add --no-cache \
         curl \
         ca-certificates \
         unzip \
-        cabextract \
+        p7zip \
         xvfb \
         mesa-dri-gallium \
         font-dejavu \
@@ -47,10 +47,14 @@ RUN apk add --no-cache \
 RUN mkdir -p /opt/ucrt /root/.wine/drive_c/windows/system32 \
     && curl -fsSL -o /opt/ucrt/vc_redist.x64.exe \
         "https://aka.ms/vs/17/release/vc_redist.x64.exe" \
-    && echo "[build] VC++ redist downloaded; extracting ucrtbase.dll..." \
-    && cabextract -q -F 'ucrtbase.dll' -d /opt/ucrt /opt/ucrt/vc_redist.x64.exe \
-    && cp /opt/ucrt/ucrtbase.dll /root/.wine/drive_c/windows/system32/ucrtbase.dll \
-    && echo "[build] ucrtbase.dll injected into prefix system32" \
+    && echo "[build] VC++ redist downloaded; extracting UCRT dlls (nested cab)..." \
+    && 7z x -y -o/opt/ucrt /opt/ucrt/vc_redist.x64.exe >/dev/null 2>&1 || true \
+    && 7z x -y -o/opt/ucrt /opt/ucrt/*.cab >/dev/null 2>&1 || true \
+    && ls /opt/ucrt >/dev/null 2>&1 || true \
+    && echo "[build] ucrtbase.dll present: $(test -f /opt/ucrt/ucrtbase.dll && echo yes || echo NO)" \
+    && cp -v /opt/ucrt/ucrtbase.dll /root/.wine/drive_c/windows/system32/ucrtbase.dll \
+    && cp -v /opt/ucrt/api-ms-win-crt-*.dll /root/.wine/drive_c/windows/system32/ 2>/dev/null || true \
+    && echo "[build] UCRT dlls injected into prefix system32" \
     && rm -rf /opt/ucrt \
     && echo "[build] forcing Wine to use native ucrtbase..." \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 reg add \
