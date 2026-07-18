@@ -20,7 +20,7 @@ ENV LANG=C.UTF-8 \
     MT5_DIR=/opt/mt5/terminal \
     PYTHONHASHSEED=0
 
-# ---- system deps: xvfb, wine, python3 (native for wheel fetch), tools ----
+# ---- system deps + official WineHQ repo (most reliable Wine on Ubuntu) ----
 RUN dpkg --add-architecture i386 \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -28,6 +28,7 @@ RUN dpkg --add-architecture i386 \
         coreutils \
         curl \
         ca-certificates \
+        gnupg \
         unzip \
         xvfb \
         python3 \
@@ -42,10 +43,16 @@ RUN dpkg --add-architecture i386 \
         libxi6 \
         libxrandr2 \
         libxxf86vm1 \
+    # ---- add official WineHQ repository ----
+    && curl -fsSL https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor -o /usr/share/keyrings/winehq-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/winehq-archive-keyring.gpg] https://dl.winehq.org/wine-builds/ubuntu/ jammy main" > /etc/apt/sources.list.d/winehq.list \
+    && apt-get update \
     && apt-get install -y --no-install-recommends \
-        wine64 \
-        wine32 \
+        winehq-stable \
     && rm -rf /var/lib/apt/lists/*
+
+# Ensure wine64 is on PATH (WineHQ installs to /opt/wine-stable/bin)
+ENV PATH="/opt/wine-stable/bin:${PATH}"
 
 # ---------------------------------------------------------------------------
 # Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS).
