@@ -50,6 +50,8 @@ RUN mkdir -p /opt/winpy /opt/mt5/install \
     && echo "[build] Windows Python downloaded" \
     && mkdir -p /root/.wine/drive_c/Python311 \
     && unzip -o /opt/winpy/python311.zip -d /root/.wine/drive_c/Python311/ \
+    && echo "[build] enabling site-packages in embeddable Python (uncomment import site)" \
+    && sed -i 's/^#import site/import site/' /root/.wine/drive_c/Python311/python311._pth \
     && curl -fsSL -o /root/.wine/drive_c/Python311/get-pip.py \
         "https://bootstrap.pypa.io/get-pip.py" \
     && echo "[build] bootstrapping pip in Wine Python..." \
