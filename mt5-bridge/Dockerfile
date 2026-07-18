@@ -19,6 +19,7 @@ ENV LANG=C.UTF-8 \
     MT5_TERMINAL_PATH=/opt/mt5/terminal/terminal64.exe \
     MT5_DIR=/opt/mt5/terminal \
     PYTHONHASHSEED=0 \
+    XDG_RUNTIME_DIR=/tmp \
     PATH="/usr/bin:/usr/local/bin:/opt/wine-stable/bin:${PATH}"
 
 # ---- system deps + official WineHQ repo + Windows Python (merged) ----
@@ -77,14 +78,18 @@ RUN dpkg --add-architecture i386 \
     && echo "[build] enabling site-packages in embeddable Python (uncomment import site)" \
     && sed -i 's/^#import site/import site/' /root/.wine/drive_c/Python310/python310._pth \
     && echo "[build] downloading WINDOWS wheels with native pip3 (no Wine networking)..." \
-    && pip3 install --no-cache-dir --target=/opt/whl pip setuptools wheel \
     && pip3 download --no-cache-dir --dest=/opt/whl \
         --platform win_amd64 --python-version 310 --abi cp310 --only-binary=:all: \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
     && echo "[build] offline-installing packages into Wine Python (no network under Wine)..." \
+    && export XDG_RUNTIME_DIR=/tmp \
+    && PIP_WHL_Z=$(ls /opt/whl/pip-*.whl | head -1 | sed 's|^/|Z:/|; s|/|\\\\|g') \
+    && echo "[build] bootstrapping pip from wheel: ${PIP_WHL_Z}" \
+    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine \
+        C:\\Python310\\python.exe "${PIP_WHL_Z}\\pip" install \
+        --no-index --find-links=Z:\\opt\\whl pip setuptools wheel \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine \
         C:\\Python310\\python.exe -m pip install --no-index --find-links=Z:\\opt\\whl \
-        pip setuptools wheel \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
     && echo "[build] Wine Python + MetaTrader5 ready" \
     && rm -rf /opt/winpy /opt/mt5/install /opt/whl
