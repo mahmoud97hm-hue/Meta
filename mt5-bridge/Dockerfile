@@ -51,9 +51,13 @@ RUN dpkg --add-architecture i386 \
     && apt-get install -y --no-install-recommends \
         winehq-stable \
     && rm -rf /var/lib/apt/lists/* \
-    # ---- symlink Wine binaries into /usr/local/bin (always on PATH) ----
-    && ln -sf /opt/wine-stable/bin/wine /usr/local/bin/wine \
-    && ln -sf /opt/wine-stable/bin/wine64 /usr/local/bin/wine64 \
+    # ---- locate Wine binaries (layout varies by WineHQ version) and symlink ----
+    && WINE64_BIN=$(find / -name wine64 -type f 2>/dev/null | head -1) \
+    && echo "[build] found wine64 at: ${WINE64_BIN}" \
+    && if [ -z "${WINE64_BIN}" ]; then echo "[build] ERROR: wine64 not found"; exit 1; fi \
+    && ln -sf "${WINE64_BIN}" /usr/local/bin/wine64 \
+    && WINE_BIN=$(find / -name wine -type f 2>/dev/null | head -1) \
+    && if [ -n "${WINE_BIN}" ]; then ln -sf "${WINE_BIN}" /usr/local/bin/wine; fi \
     # ---- verify Wine is on PATH ----
     && wine64 --version \
     # --------------------------------------------------------------------------
