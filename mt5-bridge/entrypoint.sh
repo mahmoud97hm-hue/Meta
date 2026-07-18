@@ -10,7 +10,7 @@ set -e
 
 # Force native UCRT over Wine's builtin stubs (avoids
 # "unimplemented function api-ms-win-crt-runtime-l1-1-0.dll.fetestexcept").
-export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-api-ms-win-crt-runtime-l1-1-0=n,b;api-ms-win-crt-private-l1-1-0=n,b;ucrtbase=n,b}"
+export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-*api-ms-win-crt*=n,b;ucrtbase=n,b}"
 
 BRIDGE_PORT="${BRIDGE_PORT:-3000}"
 BRIDGE_HOST="${BRIDGE_HOST:-0.0.0.0}"
@@ -35,7 +35,7 @@ launch_server() {
     MT5_TERMINAL_PATH="${MT5_TERMINAL_PATH}" \
     MT5_LOGIN="${MT5_LOGIN}" MT5_PASSWORD="${MT5_PASSWORD}" MT5_SERVER="${MT5_SERVER}" \
     BRIDGE_API_KEY="${BRIDGE_API_KEY}" \
-    WINEPREFIX=/root/.wine WINEARCH=win64 WINEDEBUG=-all \
+    WINEPREFIX=/home/wine/.wine WINEARCH=win64 WINEDEBUG=-all \
     wine64 C:\\Python310\\python.exe /opt/mt5bridge/server.py &
   echo $!
 }
