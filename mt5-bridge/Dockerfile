@@ -2,16 +2,18 @@
 #
 # Built for Railway (Linux/amd64).
 #   * NO VNC, NO WM — Xvfb virtual display only.
-#   * Base: Ubuntu 22.04 + official WineHQ stable.
+#   * Base: Ubuntu 22.04 with native wine64 (no WineHQ repo, no i386).
+#   * Wine prefix explicitly initialized (wineboot) before any Python step.
 #   * Python 3.10.11 embeddable (Windows) runs inside Wine; the Windows-only
 #     MetaTrader5 package is pip-installed into it. server.py runs via
-#     `wine C:\Python310\python.exe`.
+#     `wine64 C:\Python310\python.exe`.
 
 FROM ubuntu:22.04
 
 ENV LANG=C.UTF-8 \
     DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:99 \
+    WINEARCH=win64 \
     WINEPREFIX=/root/.wine \
     WINEDEBUG=-all \
     BRIDGE_HOST=0.0.0.0 \
@@ -19,18 +21,14 @@ ENV LANG=C.UTF-8 \
     MT5_TERMINAL_PATH=/opt/mt5/terminal/terminal64.exe \
     MT5_DIR=/opt/mt5/terminal \
     PYTHONHASHSEED=0 \
-    XDG_RUNTIME_DIR=/tmp \
-    PATH="/usr/bin:/usr/local/bin:/opt/wine-stable/bin:${PATH}"
+    XDG_RUNTIME_DIR=/tmp
 
-# ---- system deps + official WineHQ repo + Windows Python (merged) ----
-RUN dpkg --add-architecture i386 \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
+# ---- system deps: xvfb + native wine64 + python3 + tools ----
+RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
         coreutils \
         curl \
         ca-certificates \
-        gnupg \
         unzip \
         xvfb \
         python3 \
@@ -45,24 +43,23 @@ RUN dpkg --add-architecture i386 \
         libxi6 \
         libxrandr2 \
         libxxf86vm1 \
-    # ---- add official WineHQ repository ----
-    && curl -fsSL https://dl.winehq.org/wine-builds/winehq.key | gpg --dearmor -o /usr/share/keyrings/winehq-archive-keyring.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/winehq-archive-keyring.gpg] https://dl.winehq.org/wine-builds/ubuntu/ jammy main" > /etc/apt/sources.list.d/winehq.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-        winehq-stable \
-    && rm -rf /var/lib/apt/lists/* \
-    && wine --version \
-    # --------------------------------------------------------------------------
-    # Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS).
-    # The MetaTrader5 PyPI package is Windows-only (it loads terminal DLLs), so
-    # server.py MUST run under Wine's Windows Python, NOT the native python3.
-    # Ubuntu's Wine includes a working UCRT, so no manual ucrtbase.dll injection
-    # is required. We use the EMBEDDABLE zip (no GUI installer). We enable
-    # site-packages via python310._pth, fetch Windows wheels with native pip3,
-    # then offline-install into Wine Python (no Wine networking needed).
-    # --------------------------------------------------------------------------
-    && mkdir -p /opt/winpy /opt/mt5/install /opt/whl \
+        wine64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- initialize Wine prefix (generates kernel32.dll, avoids c0000135) ----
+RUN echo "[build] initializing 64-bit Wine prefix..." \
+    && wineboot --init 2>&1 || true \
+    && wineserver -w \
+    && wine64 --version
+
+# ---- Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS) ----
+# MetaTrader5 is Windows-only, so server.py runs under Wine's Windows Python.
+# We use the EMBEDDABLE zip (no GUI installer). We enable site-packages via
+# python310._pth, fetch Windows wheels with native pip3, unzip pip/setuptools
+# directly into site-packages, then offline-install MetaTrader5 etc.
+ENV WINEPYTHON=C:\\Python310
+
+RUN mkdir -p /opt/winpy /opt/mt5/install /opt/whl \
     && curl -fsSL -o /opt/winpy/python310.zip \
         "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip" \
     && echo "[build] Windows Python 3.10.11 (embeddable) downloaded" \
@@ -81,19 +78,16 @@ RUN dpkg --add-architecture i386 \
     && unzip -q /opt/whl/setuptools-*.whl -d /root/.wine/drive_c/Python310/Lib/site-packages/ \
     && unzip -q /opt/whl/wheel-*.whl -d /root/.wine/drive_c/Python310/Lib/site-packages/ \
     && echo "[build] installing MetaTrader5 + socketio + uvicorn into Wine Python..." \
-    && export XDG_RUNTIME_DIR=/tmp \
-    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine \
+    && WINEPREFIX=/root/.wine WINEARCH=win64 WINEDEBUG=-all wine64 \
         C:\\Python310\\python.exe -m pip install --no-index --find-links=Z:\\opt\\whl \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" colorama \
     && echo "[build] Wine Python + MetaTrader5 ready" \
     && rm -rf /opt/winpy /opt/mt5/install /opt/whl
 
-ENV WINEPYTHON=C:\\Python310
-
 WORKDIR /opt/mt5bridge
 
 # ---- Auto-install the MT5 terminal at BUILD TIME (no Windows host required) ----
-RUN mkdir -p /opt/mt5/install && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe"     && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEDEBUG=-all wine /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
+RUN mkdir -p /opt/mt5/install && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe" && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
 
 # ---- Bridge server (runs under Wine Python at runtime) ----
 COPY server.py     /opt/mt5bridge/server.py
