@@ -6,8 +6,9 @@
 #   * A WINDOWS Python 3.10.11 (embeddable) runs INSIDE Wine; the Windows-only
 #     MetaTrader5 package is pip-installed into it. server.py runs via
 #     `wine64 C:\Python310\python.exe`.
-#   * Python 3.10 links the UCRT that Wine already ships, so NO winetricks /
-#     ucrtbase patching is required (3.11 needed crealf which Wine lacked).
+#   * Alpine's Wine lacks ucrtbase.dll.crealf, so we MANUALLY inject a real
+#     ucrtbase.dll (extracted from Microsoft's official VC++ 2015-2022
+#     redistributable) into the prefix and force Wine to use it as "native".
 
 FROM alpine:3.20
 
@@ -21,13 +22,14 @@ ENV LANG=C.UTF-8 \
     MT5_DIR=/opt/mt5/terminal \
     PYTHONHASHSEED=0
 
-# ---- system deps: xvfb (virtual display) + wine + tools ----
+# ---- system deps: xvfb (virtual display) + wine + cab extraction tools ----
 RUN apk add --no-cache \
         bash \
         coreutils \
         curl \
         ca-certificates \
         unzip \
+        cabextract \
         xvfb \
         mesa-dri-gallium \
         font-dejavu \
@@ -36,14 +38,31 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # ---------------------------------------------------------------------------
+# MANUAL UCRT injection (no winetricks).
+# Extract a real ucrtbase.dll from Microsoft's official VC++ 2015-2022
+# redistributable (vc_redist.x64.exe is a self-extracting cabinet) and drop it
+# into the Wine prefix system32, then register it as a "native" override so
+# Wine uses our DLL instead of its broken builtin (which lacks crealf).
+# ---------------------------------------------------------------------------
+RUN mkdir -p /opt/ucrt /root/.wine/drive_c/windows/system32 \
+    && curl -fsSL -o /opt/ucrt/vc_redist.x64.exe \
+        "https://aka.ms/vs/17/release/vc_redist.x64.exe" \
+    && echo "[build] VC++ redist downloaded; extracting ucrtbase.dll..." \
+    && cabextract -q -F 'ucrtbase.dll' -d /opt/ucrt /opt/ucrt/vc_redist.x64.exe \
+    && cp /opt/ucrt/ucrtbase.dll /root/.wine/drive_c/windows/system32/ucrtbase.dll \
+    && echo "[build] ucrtbase.dll injected into prefix system32" \
+    && rm -rf /opt/ucrt \
+    && echo "[build] forcing Wine to use native ucrtbase..." \
+    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 reg add \
+        "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides" \
+        /v ucrtbase /t REG_SZ /d native /f
+
+# ---------------------------------------------------------------------------
 # Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS).
 # The MetaTrader5 PyPI package is Windows-only (it loads terminal DLLs), so
 # server.py MUST run under Wine's Windows Python, NOT Alpine's native python3.
-#
-# We use the EMBEDDABLE zip (no GUI installer -> no ShellExecute/display
-# issues under headless Wine). Python 3.10 links the UCRT Wine already
-# provides, so no winetricks/ucrtbase patching is needed. We enable
-# site-packages via python310._pth and bootstrap pip + the required packages.
+# Embeddable zip = no GUI installer (no ShellExecute/display issues). We
+# enable site-packages via python310._pth and bootstrap pip + packages.
 # ---------------------------------------------------------------------------
 ENV WINEPYTHON=C:\\Python310
 
