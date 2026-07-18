@@ -61,8 +61,12 @@ RUN echo "[build] locating Wine binaries..." \
     && wineboot --init 2>&1 || true \
     && wineserver -w \
     && echo "[build] installing vcrun2019 (real UCRT) into prefix..." \
-    && WINEPREFIX=/root/.wine winetricks -q vcrun2019 \
+    && xvfb-run -a env WINEPREFIX=/root/.wine winetricks -q vcrun2019 \
     && wineserver -w \
+    && echo "[build] verifying vcrun2019 actually completed (not just exited 0)..." \
+    && (test -f /root/.wine/winetricks.log && grep -qx 'vcrun2019' /root/.wine/winetricks.log \
+        && echo "[build] vcrun2019 confirmed in winetricks.log" \
+        || (echo "[build] FATAL: vcrun2019 did not complete — winetricks.log missing the verb. Build aborted so this doesn't silently ship a broken UCRT." && exit 1)) \
     && echo "[build] verifying wine64:" \
     && wine64 --version
 
