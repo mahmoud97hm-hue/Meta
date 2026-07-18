@@ -45,6 +45,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxrandr2 \
         libxxf86vm1 \
         wine64 \
+        winetricks \
+        cabextract \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- locate Wine binaries and add them to PATH before using them ----
@@ -58,6 +60,10 @@ RUN echo "[build] locating Wine binaries..." \
     && echo "[build] initializing 64-bit Wine prefix..." \
     && wineboot --init 2>&1 || true \
     && wineserver -w \
+    && echo "[build] installing vcrun2019 (real UCRT) into prefix..." \
+    && WINEPREFIX=/root/.wine winetricks -q vcrun2019 \
+    && wineserver -w \
+    && echo "[build] verifying wine64:" \
     && wine64 --version
 
 # ---- Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS) ----
