@@ -47,7 +47,7 @@ MT5_PASSWORD = os.environ.get("MT5_PASSWORD", "")
 MT5_SERVER = os.environ.get("MT5_SERVER", "")
 REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
 
-CONFIG_DIR = Path("/app/backend/config")
+CONFIG_DIR = Path(os.environ.get("BRIDGE_CONFIG_DIR", "/opt/mt5bridge/backend/config"))
 ACCOUNTS_FILE = CONFIG_DIR / "accounts.json"
 TERMINALS_FILE = CONFIG_DIR / "terminals.json"
 

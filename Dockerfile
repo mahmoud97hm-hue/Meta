@@ -78,11 +78,11 @@ RUN echo "[build] Downloading MT5 portable from MediaFire..." \
     && echo "[build] MT5 portable deployment complete."
 
 # ---- application code ----
-WORKDIR /app
-COPY backend/ /app/backend/
-COPY scripts/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+WORKDIR /opt/mt5bridge
+COPY backend/ /opt/mt5bridge/backend/
+COPY scripts/entrypoint.sh /opt/mt5bridge/entrypoint.sh
+RUN chmod +x /opt/mt5bridge/entrypoint.sh
 
 EXPOSE 3000
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["/opt/mt5bridge/entrypoint.sh"]
