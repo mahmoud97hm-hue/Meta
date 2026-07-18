@@ -8,6 +8,10 @@
 
 set -e
 
+# Force native UCRT over Wine's builtin stubs (avoids
+# "unimplemented function api-ms-win-crt-runtime-l1-1-0.dll.fetestexcept").
+export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-api-ms-win-crt-runtime-l1-1-0=n,b;api-ms-win-crt-private-l1-1-0=n,b;ucrtbase=n,b}"
+
 BRIDGE_PORT="${BRIDGE_PORT:-3000}"
 BRIDGE_HOST="${BRIDGE_HOST:-0.0.0.0}"
 MT5_TERMINAL_PATH="${MT5_TERMINAL_PATH:-C:\\MetaTrader5\\terminal64.exe}"

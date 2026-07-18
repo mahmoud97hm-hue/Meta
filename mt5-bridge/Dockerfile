@@ -24,6 +24,7 @@ ENV LANG=C.UTF-8 \
     MT5_DIR=C:\\MetaTrader5 \
     PYTHONHASHSEED=0 \
     XDG_RUNTIME_DIR=/tmp \
+    WINEDLLOVERRIDES="api-ms-win-crt-runtime-l1-1-0=n,b;api-ms-win-crt-private-l1-1-0=n,b;ucrtbase=n,b" \
     PATH="/usr/lib/wine:/usr/bin:/usr/local/bin:${PATH}"
 
 # ---- system deps: xvfb + native wine64 + winetricks + tools ----
