@@ -39,16 +39,15 @@ API_KEY = os.environ.get("BRIDGE_API_KEY", "") or None
 # Terminal path resolution
 # --------------------------------------------------------------------------
 # The MetaTrader5 Python lib runs INSIDE Wine (via wine64 python.exe), so it
-# must receive a WINDOWS-style path (e.g. C:\terminal\terminal64.exe) even
+# must receive a WINDOWS-style path (e.g. C:\MetaTrader5\terminal64.exe) even
 # though the Dockerfile / Railway env may express the path with a Linux
 # layout. We auto-translate so no manual mapping is required:
 #
 #   1. Explicit Windows path wins:           MT5_TERMINAL_WINPATH
 #   2. Else translate a Linux absolute path:  /opt/mt5/terminal/... -> C:\terminal\...
-#      (the build installs portably into C:\terminal; we map the matching
-#       Linux prefix /opt/mt5/terminal to it)
+#      (legacy mapping kept for safety)
 #   3. Else if it already looks like a Windows path, pass through.
-#   4. Else fall back to the portable default C:\terminal\terminal64.exe.
+#   4. Else fall back to the portable default C:\MetaTrader5\terminal64.exe.
 # --------------------------------------------------------------------------
 _LINUX_TERMINAL_PREFIX = "/opt/mt5/terminal"
 
@@ -59,7 +58,7 @@ def _resolve_mt5_terminal_path() -> str | None:
         return winpath
     raw = os.environ.get("MT5_TERMINAL_PATH", "") or None
     if not raw:
-        return "C:\\terminal\\terminal64.exe"
+        return "C:\\MetaTrader5\\terminal64.exe"
     # Already a Windows path (drive letter or backslash)?
     if ":" in raw or "\\" in raw:
         return raw

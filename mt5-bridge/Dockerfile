@@ -1,10 +1,9 @@
 # mt5-bridge/Dockerfile — HEADLESS, VNC-FREE, SELF-CONTAINED MT5 bridge
 #
 # Built for Railway (Linux/amd64).
-#   * PURE 64-BIT. No i386, no wine32, no winetricks (winetricks tries to run
-#     32-bit code -> Exec format error on Railway's strictly 64-bit kernel).
-#   * UCRT (Universal C Runtime) injected NATIVELY via cabextract on the Linux
-#     side, then registered as 'native' via `wine64 reg add`.
+#   * PURE 64-BIT. No i386, no wine32. winetricks runs FORCED 64-bit only.
+#   * UCRT (Universal C Runtime) installed via winetricks vcrun2019 (forced
+#     win64) with a native DLL-injection fallback for strict 64-bit kernels.
 #   * Base: Ubuntu 22.04 with native wine64.
 #   * Wine prefix explicitly initialized (wineboot) before any Python step.
 #   * Python 3.10.11 embeddable (Windows) runs inside Wine; the Windows-only
@@ -21,8 +20,8 @@ ENV LANG=C.UTF-8 \
     WINEDEBUG=-all \
     BRIDGE_HOST=0.0.0.0 \
     BRIDGE_PORT=3000 \
-    MT5_TERMINAL_PATH=/opt/mt5/terminal/terminal64.exe \
-    MT5_DIR=/opt/mt5/terminal \
+    MT5_TERMINAL_PATH=C:\\MetaTrader5\\terminal64.exe \
+    MT5_DIR=C:\\MetaTrader5 \
     PYTHONHASHSEED=0 \
     XDG_RUNTIME_DIR=/tmp \
     PATH="/usr/lib/wine:/usr/bin:/usr/local/bin:${PATH}"
@@ -105,7 +104,7 @@ RUN echo "[build] installing UCRT (vcrun2019) via winetricks, forced win64..." \
 # directly into site-packages, then offline-install MetaTrader5 etc.
 ENV WINEPYTHON=C:\\Python310
 
-RUN mkdir -p /opt/winpy /opt/mt5/install /opt/whl \
+RUN mkdir -p /opt/winpy /opt/whl \
     && curl -fsSL -o /opt/winpy/python310.zip \
         "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip" \
     && echo "[build] Windows Python 3.10.11 (embeddable) downloaded" \
@@ -128,12 +127,25 @@ RUN mkdir -p /opt/winpy /opt/mt5/install /opt/whl \
         C:\\Python310\\python.exe -m pip install --no-index --find-links=Z:\\opt\\whl \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" colorama \
     && echo "[build] Wine Python + MetaTrader5 ready" \
-    && rm -rf /opt/winpy /opt/mt5/install /opt/whl
+    && rm -rf /opt/winpy /opt/whl
 
 WORKDIR /opt/mt5bridge
 
-# ---- Auto-install the MT5 terminal at BUILD TIME (no Windows host required) ----
-RUN mkdir -p /opt/mt5/install && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe" && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEARCH=win64 WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
+# ---- Download the MT5 portable archive at BUILD TIME ----
+# The portable directory is NOT committed to Git (terminal64.exe > 100MB).
+# Host the zipped mt5_portable somewhere (GitHub Release, S3, etc.) and point
+# MT5_ARCHIVE_URL at it. The archive is extracted straight into the Wine C:
+# drive so the terminal lives at C:\MetaTrader5\terminal64.exe.
+# Override at build: docker build --build-arg MT5_ARCHIVE_URL=https://...
+ARG MT5_ARCHIVE_URL=https://example.com/mt5_portable.zip
+RUN echo "[build] downloading MT5 portable archive..." \
+    && mkdir -p /tmp/mt5arc /root/.wine/drive_c/MetaTrader5 \
+    && curl -fsSL -o /tmp/mt5arc/mt5_portable.zip "${MT5_ARCHIVE_URL}" \
+    && echo "[build] extracting MT5 portable into C:\\MetaTrader5..." \
+    && unzip -o /tmp/mt5arc/mt5_portable.zip -d /root/.wine/drive_c/MetaTrader5/ \
+    && echo "[build] MT5 terminal ready at C:\\MetaTrader5\\terminal64.exe" \
+    && ls /root/.wine/drive_c/MetaTrader5/ \
+    && rm -rf /tmp/mt5arc
 
 # ---- Bridge server (runs under Wine Python at runtime) ----
 COPY server.py     /opt/mt5bridge/server.py

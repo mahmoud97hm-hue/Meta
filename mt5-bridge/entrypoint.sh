@@ -10,7 +10,7 @@ set -e
 
 BRIDGE_PORT="${BRIDGE_PORT:-3000}"
 BRIDGE_HOST="${BRIDGE_HOST:-0.0.0.0}"
-MT5_TERMINAL_PATH="${MT5_TERMINAL_PATH:-/opt/mt5/terminal/terminal64.exe}"
+MT5_TERMINAL_PATH="${MT5_TERMINAL_PATH:-C:\\MetaTrader5\\terminal64.exe}"
 MEM_LIMIT_MB="${MEM_LIMIT_MB:-1800}"
 
 echo "[entrypoint] starting headless Xvfb virtual display on ${DISPLAY}"
