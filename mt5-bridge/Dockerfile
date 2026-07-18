@@ -28,17 +28,39 @@ RUN apk add --no-cache \
         coreutils \
         curl \
         ca-certificates \
-        python3 \
-        py3-pip \
         xvfb \
         mesa-dri-gallium \
         font-dejavu \
         && apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/v3.20/community \
         wine \
-    && pip3 install --no-cache-dir --break-system-packages \
-        python-socketio==5.11.4 \
-        aiohttp \
     && rm -rf /var/cache/apk/*
+
+# ---------------------------------------------------------------------------
+# Install a WINDOWS Python 3.11 inside the Wine prefix.
+# The MetaTrader5 PyPI package is Windows-only (it loads terminal DLLs), so
+# server.py MUST run under Wine's Windows Python, NOT Alpine's native python3.
+# We download the official Windows embeddable package, unzip it into the
+# prefix, bootstrap pip, then install MetaTrader5 + socketio + uvicorn into it.
+# ---------------------------------------------------------------------------
+ENV WINEPYTHON=C:\\Python311
+
+RUN mkdir -p /opt/winpy /opt/mt5/install \
+    && curl -fsSL -o /opt/winpy/python311.zip \
+        "https://www.python.org/ftp/python/3.11.4/python-3.11.4-embed-amd64.zip" \
+    && echo "[build] Windows Python downloaded" \
+    && mkdir -p /root/.wine/drive_c/Python311 \
+    && unzip -o /opt/winpy/python311.zip -d /root/.wine/drive_c/Python311/ \
+    && curl -fsSL -o /root/.wine/drive_c/Python311/get-pip.py \
+        "https://bootstrap.pypa.io/get-pip.py" \
+    && echo "[build] bootstrapping pip in Wine Python..." \
+    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
+        C:\\Python311\\python.exe C:\\Python311\\get-pip.py --no-warn-script-location \
+    && echo "[build] installing MetaTrader5 + socketio + uvicorn into Wine Python..." \
+    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
+        C:\\Python311\\python.exe -m pip install --no-cache-dir \
+        "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
+    && echo "[build] Wine Python + MetaTrader5 ready" \
+    && rm -rf /opt/winpy /opt/mt5/install
 
 # ===========================================================================
 # OPTIONAL winetricks bootstrap layer (COMMENTED OUT BY DEFAULT — keep the
@@ -74,10 +96,8 @@ WORKDIR /opt/mt5bridge
 #    download the broker-specific datacenter config on first login.
 RUN mkdir -p /opt/mt5/install /opt/mt5/terminal && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe" && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
 
-# ---- Bridge server + deps ----
+# ---- Bridge server (runs under Wine Python at runtime) ----
 COPY server.py     /opt/mt5bridge/server.py
-COPY requirements-bridge.txt /opt/mt5bridge/requirements-bridge.txt
-RUN pip3 install --no-cache-dir --break-system-packages -r /opt/mt5bridge/requirements-bridge.txt || true
 
 COPY entrypoint.sh /opt/mt5bridge/entrypoint.sh
 RUN chmod +x /opt/mt5bridge/entrypoint.sh

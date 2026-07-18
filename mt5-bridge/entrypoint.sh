@@ -22,13 +22,18 @@ sleep 2
 
 # The MetaTrader5 Python lib actually launches the terminal process; we track
 # its memory via the wine service host. Keep a handle for the watchdog.
-echo "[entrypoint] launching socket.io bridge server (drives MT5 via Python lib)"
-BRIDGE_HOST="${BRIDGE_HOST}" BRIDGE_PORT="${BRIDGE_PORT}" \
+echo "[entrypoint] launching socket.io bridge server under Wine Python (drives MT5 via Windows MetaTrader5 lib)"
+launch_server() {
+  BRIDGE_HOST="${BRIDGE_HOST}" BRIDGE_PORT="${BRIDGE_PORT}" \
     MT5_TERMINAL_PATH="${MT5_TERMINAL_PATH}" \
     MT5_LOGIN="${MT5_LOGIN}" MT5_PASSWORD="${MT5_PASSWORD}" MT5_SERVER="${MT5_SERVER}" \
     BRIDGE_API_KEY="${BRIDGE_API_KEY}" \
-    python3 /opt/mt5bridge/server.py &
-SERVER_PID=$!
+    WINEPREFIX=/root/.wine WINEDEBUG=-all \
+    wine64 C:\\Python311\\python.exe /opt/mt5bridge/server.py &
+  echo $!
+}
+
+SERVER_PID=$(launch_server)
 
 # ---- memory watchdog: keep Railway happy ----
 # Monitor the python bridge (which hosts the MT5 terminal) RSS and restart
@@ -43,12 +48,7 @@ watchdog() {
       echo "[watchdog] bridge RSS=${RSS_MB}MB exceeds ${MEM_LIMIT_MB}MB — recycling"
       kill -TERM "$SERVER_PID" 2>/dev/null || true
       sleep 5
-      BRIDGE_HOST="${BRIDGE_HOST}" BRIDGE_PORT="${BRIDGE_PORT}" \
-        MT5_TERMINAL_PATH="${MT5_TERMINAL_PATH}" \
-        MT5_LOGIN="${MT5_LOGIN}" MT5_PASSWORD="${MT5_PASSWORD}" MT5_SERVER="${MT5_SERVER}" \
-        BRIDGE_API_KEY="${BRIDGE_API_KEY}" \
-        python3 /opt/mt5bridge/server.py &
-      SERVER_PID=$!
+      SERVER_PID=$(launch_server)
     fi
   done
 }
