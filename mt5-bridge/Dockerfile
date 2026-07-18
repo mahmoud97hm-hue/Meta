@@ -80,7 +80,7 @@ RUN dpkg --add-architecture i386 \
     && echo "[build] downloading WINDOWS wheels with native pip3 (no Wine networking)..." \
     && pip3 download --no-cache-dir --dest=/opt/whl \
         --platform win_amd64 --python-version 310 --abi cp310 --only-binary=:all: \
-        pip setuptools wheel \
+        pip setuptools wheel colorama \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
     && echo "[build] unzipping pip/setuptools/wheel directly into Wine Python site-packages..." \
     && mkdir -p /root/.wine/drive_c/Python310/Lib/site-packages \
@@ -91,7 +91,7 @@ RUN dpkg --add-architecture i386 \
     && export XDG_RUNTIME_DIR=/tmp \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine \
         C:\\Python310\\python.exe -m pip install --no-index --find-links=Z:\\opt\\whl \
-        "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
+        "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" colorama \
     && echo "[build] Wine Python + MetaTrader5 ready" \
     && rm -rf /opt/winpy /opt/mt5/install /opt/whl
 
