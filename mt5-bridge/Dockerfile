@@ -45,9 +45,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxrandr2 \
         libxxf86vm1 \
         wine64 \
-        winetricks \
         cabextract \
     && rm -rf /var/lib/apt/lists/*
+
+# ---- winetricks: pull the live script from upstream, not apt's stale one ----
+# Ubuntu 22.04's apt winetricks (20210206) hardcodes sha256 checksums for MS
+# redistributable downloads. Microsoft rotates the binary behind the aka.ms
+# "latest" alias URLs periodically, so a 5-year-old script's checksums drift
+# out of date and every download fails verification. Upstream's script is
+# updated to track this; always use it instead of the distro package.
+RUN curl -fsSL -o /usr/local/bin/winetricks \
+        https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks \
+    && chmod +x /usr/local/bin/winetricks \
+    && winetricks --version
 
 # ---- locate Wine binaries and add them to PATH before using them ----
 RUN echo "[build] locating Wine binaries..." \
