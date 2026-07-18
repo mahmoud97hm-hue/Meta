@@ -2,17 +2,15 @@
 #
 # Built for Railway (Linux/amd64).
 #   * NO VNC, NO WM — Xvfb virtual display only.
+#   * Base: Ubuntu 22.04 — provides a modern Wine with working UCRT (no manual
+#     DLL injection needed). Python 3.10.11 embeddable runs inside Wine.
 #   * MT5 installed AUTOMATICALLY at build time under Wine into C:\terminal.
-#   * A WINDOWS Python 3.10.11 (embeddable) runs INSIDE Wine; the Windows-only
-#     MetaTrader5 package is pip-installed into it. server.py runs via
-#     `wine64 C:\Python310\python.exe`.
-#   * Alpine's Wine lacks ucrtbase.dll.crealf, so we MANUALLY inject a real
-#     ucrtbase.dll (extracted from Microsoft's official VC++ 2015-2022
-#     redistributable) into the prefix and force Wine to use it as "native".
+#   * server.py runs via `wine64 C:\Python310\python.exe`.
 
-FROM alpine:3.20
+FROM ubuntu:22.04
 
 ENV LANG=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:99 \
     WINEPREFIX=/root/.wine \
     WINEDEBUG=-all \
@@ -22,52 +20,40 @@ ENV LANG=C.UTF-8 \
     MT5_DIR=/opt/mt5/terminal \
     PYTHONHASHSEED=0
 
-# ---- system deps: xvfb (virtual display) + wine + cab extraction tools ----
-RUN apk add --no-cache \
+# ---- system deps: xvfb, wine, python3 (native for wheel fetch), tools ----
+RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
         coreutils \
         curl \
         ca-certificates \
         unzip \
-        p7zip \
-        py3-pip \
         xvfb \
-        mesa-dri-gallium \
-        font-dejavu \
-        && apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/v3.20/community \
-        wine \
-    && rm -rf /var/cache/apk/*
-
-# ---------------------------------------------------------------------------
-# MANUAL UCRT injection (no winetricks).
-# Extract a real ucrtbase.dll from Microsoft's official VC++ 2015-2022
-# redistributable (vc_redist.x64.exe is a self-extracting cabinet) and drop it
-# into the Wine prefix system32, then register it as a "native" override so
-# Wine uses our DLL instead of its broken builtin (which lacks crealf).
-# ---------------------------------------------------------------------------
-RUN mkdir -p /opt/ucrt /root/.wine/drive_c/windows/system32 \
-    && curl -fsSL -o /opt/ucrt/vc_redist.x64.exe \
-        "https://aka.ms/vs/17/release/vc_redist.x64.exe" \
-    && echo "[build] VC++ redist downloaded; extracting UCRT dlls (nested cab)..." \
-    && 7z x -y -o/opt/ucrt /opt/ucrt/vc_redist.x64.exe >/dev/null 2>&1 || true \
-    && 7z x -y -o/opt/ucrt /opt/ucrt/*.cab >/dev/null 2>&1 || true \
-    && ls /opt/ucrt >/dev/null 2>&1 || true \
-    && echo "[build] ucrtbase.dll present: $(test -f /opt/ucrt/ucrtbase.dll && echo yes || echo NO)" \
-    && cp -v /opt/ucrt/ucrtbase.dll /root/.wine/drive_c/windows/system32/ucrtbase.dll \
-    && cp -v /opt/ucrt/api-ms-win-crt-*.dll /root/.wine/drive_c/windows/system32/ 2>/dev/null || true \
-    && echo "[build] UCRT dlls injected into prefix system32" \
-    && rm -rf /opt/ucrt \
-    && echo "[build] forcing Wine to use native ucrtbase..." \
-    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 reg add \
-        "HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides" \
-        /v ucrtbase /t REG_SZ /d native /f
+        python3 \
+        python3-pip \
+        fontconfig \
+        fonts-dejavu-core \
+        libgl1-mesa-glx \
+        libglib2.0-0 \
+        libsm6 \
+        libxext6 \
+        libxrender1 \
+        libxi6 \
+        libxrandr2 \
+        libxxf86vm1 \
+    && apt-get install -y --no-install-recommends \
+        wine64 \
+        wine32 \
+    && rm -rf /var/lib/apt/lists/*
 
 # ---------------------------------------------------------------------------
 # Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS).
 # The MetaTrader5 PyPI package is Windows-only (it loads terminal DLLs), so
-# server.py MUST run under Wine's Windows Python, NOT Alpine's native python3.
-# Embeddable zip = no GUI installer (no ShellExecute/display issues). We
-# enable site-packages via python310._pth and bootstrap pip + packages.
+# server.py MUST run under Wine's Windows Python, NOT the native python3.
+#
+# Ubuntu's Wine includes a working UCRT, so no manual ucrtbase.dll injection
+# is required. We use the EMBEDDABLE zip (no GUI installer -> no ShellExecute/
+# display issues). We enable site-packages via python310._pth, fetch Windows
+# wheels with native pip3, then offline-install into Wine Python.
 # ---------------------------------------------------------------------------
 ENV WINEPYTHON=C:\\Python310
 
@@ -79,7 +65,7 @@ RUN mkdir -p /opt/winpy /opt/mt5/install /opt/whl \
     && unzip -o /opt/winpy/python310.zip -d /root/.wine/drive_c/Python310/ \
     && echo "[build] enabling site-packages in embeddable Python (uncomment import site)" \
     && sed -i 's/^#import site/import site/' /root/.wine/drive_c/Python310/python310._pth \
-    && echo "[build] downloading WINDOWS wheels with native pip (no Wine networking)..." \
+    && echo "[build] downloading WINDOWS wheels with native pip3 (no Wine networking)..." \
     && pip3 install --no-cache-dir --break-system-packages --target=/opt/whl pip setuptools wheel \
     && pip3 download --no-cache-dir --dest=/opt/whl \
         --platform win_amd64 --python-version 310 --abi cp310 --only-binary=:all: \
