@@ -24,6 +24,9 @@ sleep 2
 # its memory via the wine service host. Keep a handle for the watchdog.
 echo "[entrypoint] launching socket.io bridge server under Wine Python (drives MT5 via Windows MetaTrader5 lib)"
 launch_server() {
+  # Wine's embedded Python can't reach Windows entropy sources in a headless
+  # container, so hash randomization init fails. Pinning the seed avoids that.
+  PYTHONHASHSEED=0 \
   BRIDGE_HOST="${BRIDGE_HOST}" BRIDGE_PORT="${BRIDGE_PORT}" \
     MT5_TERMINAL_PATH="${MT5_TERMINAL_PATH}" \
     MT5_LOGIN="${MT5_LOGIN}" MT5_PASSWORD="${MT5_PASSWORD}" MT5_SERVER="${MT5_SERVER}" \

@@ -18,7 +18,8 @@ ENV LANG=C.UTF-8 \
     BRIDGE_HOST=0.0.0.0 \
     BRIDGE_PORT=3000 \
     MT5_TERMINAL_PATH=/opt/mt5/terminal/terminal64.exe \
-    MT5_DIR=/opt/mt5/terminal
+    MT5_DIR=/opt/mt5/terminal \
+    PYTHONHASHSEED=0
 
 # ---- system deps: xvfb (virtual display) + wine + tools ----
 RUN apk add --no-cache \
