@@ -1,0 +1,5 @@
+# mt5-bridge/requirements-bridge.txt — server-side deps for the bridge container
+python-socketio==5.11.4
+MetaTrader5==5.0.45
+aiohttp
+uvicorn

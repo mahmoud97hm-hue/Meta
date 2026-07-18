@@ -1,0 +1,5 @@
+aiohttp
+pandas
+numpy
+python-socketio
+openpyxl

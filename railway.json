@@ -1,0 +1,25 @@
+{
+  "$schema": "https://schema.up.railway.app/railway.schema.json",
+  "build": {
+    "buildCommand": "docker compose -f docker-compose.yml build",
+    "watchPatterns": ["**/*.py", "Dockerfile*", "docker-compose.yml"]
+  },
+  "deploy": {
+    "startCommand": "docker compose -f docker-compose.yml up",
+    "healthcheckPath": "/",
+    "healthcheckTimeout": 100,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  },
+  "services": {
+    "mt5": {
+      "memory": 2048,
+      "cpu": 2,
+      "healthcheckPath": "/healthz"
+    },
+    "bot": {
+      "memory": 1024,
+      "cpu": 1
+    }
+  }
+}
