@@ -136,8 +136,8 @@ WORKDIR /opt/mt5bridge
 # It is fetched from Google Drive and extracted straight into the Wine C:
 # drive so the terminal lives at C:\MetaTrader5\terminal64.exe. The UCRT
 # native DLLs injected earlier are still required for it to run.
-RUN echo "[build] Downloading MT5 portable from Google Drive directly..." \
-    && curl -L -o /tmp/mt5_portable.zip "https://drive.google.com/uc?export=download&id=1ROfOX1E0M03AeD1Gwfk3kiWLQSESS8Ok" \
+RUN echo "[build] Downloading MT5 portable from MediaFire..." \
+    && curl -L -o /tmp/mt5_portable.zip "https://download1336.mediafire.com/9tb8b4scinwg_e1ZbYoVCEzQOndXbFc6KUWS8g7KSnTxu_v8VWSID-BTENcPcPsr2-TJV2Lt1ai48nfwJOAINciJvqONgbIKQtOcEcPdRy9KXmsVUdolBxZeBLW0lzpRN95312HfhNNKSujxz9iK33Om1sq_GNlGZfIjxJnI1nDikw/95pxuqd3nzegjs1/FundingPips+2+MT5+Terminal.zip" \
     && echo "[build] Extracting MT5 archive..." \
     && mkdir -p /root/.wine/drive_c/MetaTrader5 \
     && unzip -q /tmp/mt5_portable.zip -d /root/.wine/drive_c/MetaTrader5/ \
