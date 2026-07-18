@@ -39,24 +39,22 @@ RUN apk add --no-cache \
 # Install a WINDOWS Python 3.11 inside the Wine prefix.
 # The MetaTrader5 PyPI package is Windows-only (it loads terminal DLLs), so
 # server.py MUST run under Wine's Windows Python, NOT Alpine's native python3.
-# We download the official Windows embeddable package, unzip it into the
-# prefix, bootstrap pip, then install MetaTrader5 + socketio + uvicorn into it.
+#
+# We use the FULL Windows installer (not the embeddable zip) because the
+# embeddable build links a newer UCRT than Wine ships: it calls
+# ucrtbase.dll.crealf, which Wine's bundled ucrtbase lacks -> crash. The full
+# installer deploys its own matching UCRT into the prefix, avoiding that.
+# The full installer also bundles pip, so no get-pip.py / _pth hack needed.
 # ---------------------------------------------------------------------------
 ENV WINEPYTHON=C:\\Python311
 
 RUN mkdir -p /opt/winpy /opt/mt5/install \
-    && curl -fsSL -o /opt/winpy/python311.zip \
-        "https://www.python.org/ftp/python/3.11.4/python-3.11.4-embed-amd64.zip" \
-    && echo "[build] Windows Python downloaded" \
-    && mkdir -p /root/.wine/drive_c/Python311 \
-    && unzip -o /opt/winpy/python311.zip -d /root/.wine/drive_c/Python311/ \
-    && echo "[build] enabling site-packages in embeddable Python (uncomment import site)" \
-    && sed -i 's/^#import site/import site/' /root/.wine/drive_c/Python311/python311._pth \
-    && curl -fsSL -o /root/.wine/drive_c/Python311/get-pip.py \
-        "https://bootstrap.pypa.io/get-pip.py" \
-    && echo "[build] bootstrapping pip in Wine Python..." \
-    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
-        C:\\Python311\\python.exe C:\\Python311\\get-pip.py --no-warn-script-location \
+    && curl -fsSL -o /opt/winpy/python311.exe \
+        "https://www.python.org/ftp/python/3.11.4/python-3.11.4-amd64.exe" \
+    && echo "[build] Windows Python installer downloaded" \
+    && echo "[build] installing Windows Python 3.11 into C:\\Python311 via Wine..." \
+    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/winpy/python311.exe \
+        /quiet TargetDir=C:\\Python311 PrependPath=0 Include_pip=1 Include_launcher=0 \
     && echo "[build] installing MetaTrader5 + socketio + uvicorn into Wine Python..." \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
         C:\\Python311\\python.exe -m pip install --no-cache-dir \
