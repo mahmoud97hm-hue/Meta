@@ -80,6 +80,7 @@ RUN dpkg --add-architecture i386 \
     && echo "[build] downloading WINDOWS wheels with native pip3 (no Wine networking)..." \
     && pip3 download --no-cache-dir --dest=/opt/whl \
         --platform win_amd64 --python-version 310 --abi cp310 --only-binary=:all: \
+        pip setuptools wheel \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
     && echo "[build] offline-installing packages into Wine Python (no network under Wine)..." \
     && export XDG_RUNTIME_DIR=/tmp \
