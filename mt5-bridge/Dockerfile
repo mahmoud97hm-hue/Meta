@@ -21,7 +21,9 @@ ENV LANG=C.UTF-8 \
     PYTHONHASHSEED=0
 
 # ---- system deps: xvfb, wine, python3 (native for wheel fetch), tools ----
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
         bash \
         coreutils \
         curl \
