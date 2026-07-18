@@ -52,13 +52,6 @@ RUN dpkg --add-architecture i386 \
     && apt-get install -y --no-install-recommends \
         winehq-stable \
     && rm -rf /var/lib/apt/lists/* \
-    # ---- locate Wine binary (WineHQ 11.x ships `wine`, not `wine64`) ----
-    && WINE_BIN=$(find / -name 'wine' -type f 2>/dev/null | head -1) \
-    && echo "[build] found wine at: ${WINE_BIN}" \
-    && if [ -z "${WINE_BIN}" ]; then echo "[build] ERROR: wine not found"; exit 1; fi \
-    && ln -sf "${WINE_BIN}" /usr/local/bin/wine \
-    && ln -sf "${WINE_BIN}" /usr/local/bin/wine64 \
-    # ---- verify Wine is on PATH ----
     && wine --version \
     # --------------------------------------------------------------------------
     # Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS).
