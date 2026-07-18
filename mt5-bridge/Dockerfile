@@ -1,10 +1,11 @@
 # mt5-bridge/Dockerfile — HEADLESS, VNC-FREE, SELF-CONTAINED MT5 bridge
 #
 # Built for Railway (Linux/amd64).
-#   * PURE 64-BIT. No i386, no wine32. winetricks runs FORCED 64-bit only.
-#   * UCRT (Universal C Runtime) installed via winetricks vcrun2019 (forced
-#     win64) with a native DLL-injection fallback for strict 64-bit kernels.
-#   * Base: Ubuntu 22.04 with native wine64.
+#   * PURE 64-BIT. No i386, no wine32.
+#   * Uses OFFICIAL WineHQ stable (9.0+) which natively implements modern
+#     UCRT functions (e.g. api-ms-win-crt-runtime-l1-1-0.dll.fetestexcept).
+#   * Explicit DLL overrides force Wine to load the native UCRT runtime so
+#     terminal64.exe never hits an unimplemented function.
 #   * Wine prefix explicitly initialized (wineboot) before any Python step.
 #   * Python 3.10.11 embeddable (Windows) runs inside Wine; the Windows-only
 #     MetaTrader5 package is pip-installed into it. server.py runs via
@@ -24,16 +25,18 @@ ENV LANG=C.UTF-8 \
     MT5_DIR=C:\\MetaTrader5 \
     PYTHONHASHSEED=0 \
     XDG_RUNTIME_DIR=/tmp \
-    WINEDLLOVERRIDES="api-ms-win-crt-runtime-l1-1-0=n,b;api-ms-win-crt-private-l1-1-0=n,b;ucrtbase=n,b" \
-    PATH="/usr/lib/wine:/usr/bin:/usr/local/bin:${PATH}"
+    WINEDLLOVERRIDES="*api-ms-win-crt*=n,b;ucrtbase=n,b" \
+    PATH="/opt/wine-stable/bin:/usr/lib/wine:/usr/bin:/usr/local/bin:${PATH}"
 
-# ---- system deps: xvfb + native wine64 + winetricks + tools ----
-# STRICTLY 64-BIT: no wine32 / i386 anywhere.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# ---- system deps + OFFICIAL WineHQ repository (stable 9.0+) ----
+# STRICTLY 64-BIT: no i386 / wine32. We only enable the amd64 arch.
+RUN dpkg --add-architecture amd64 \
+    && apt-get update && apt-get install -y --no-install-recommends \
         bash \
         coreutils \
         curl \
         ca-certificates \
+        gnupg \
         unzip \
         xvfb \
         python3 \
@@ -48,8 +51,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxi6 \
         libxrandr2 \
         libxxf86vm1 \
-        wine64 \
         wget \
+        apt-transport-https \
+        gpg \
+    && rm -rf /var/lib/apt/lists/* \
+    # ---- install official WineHQ key + repo (amd64 only) ----
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://dl.winehq.org/wine-builds/winehq.key \
+        | gpg --dearmor -o /etc/apt/keyrings/winehq.gpg \
+    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/winehq.gpg] https://dl.winehq.org/wine-builds/ubuntu/ jammy main" \
+        > /etc/apt/sources.list.d/winehq.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends winehq-stable \
     && rm -rf /var/lib/apt/lists/* \
     && echo "[build] installing winetricks..." \
     && curl -fsSL -o /usr/local/bin/winetricks \
@@ -58,24 +71,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # ---- locate Wine binaries and add them to PATH before using them ----
 RUN echo "[build] locating Wine binaries..." \
-    && WINE_PATH=$(find /usr/lib -name 'wine' -type d 2>/dev/null | head -1) \
-    && echo "[build] wine binary dir: ${WINE_PATH}" \
-    && export PATH="${WINE_PATH}:/usr/lib/wine:$PATH" \
+    && WINE_PATH=$(find /opt/wine-stable/bin /usr/lib -name 'wine' -type d 2>/dev/null | head -1) \
+    && WINE_BIN=$(dirname $(find /opt/wine-stable/bin /usr/lib -name 'wine64' -type f 2>/dev/null | head -1)) \
+    && echo "[build] wine bin dir: ${WINE_BIN:-${WINE_PATH}}" \
+    && export PATH="${WINE_BIN:-${WINE_PATH}}:/opt/wine-stable/bin:/usr/lib/wine:$PATH" \
     && echo "[build] verifying wine/wine64/wineboot/wineserver are on PATH:" \
     && which wine wine64 wineboot wineserver \
     # ---- initialize Wine prefix (generates kernel32.dll, avoids c0000135) ----
     && echo "[build] initializing 64-bit Wine prefix..." \
     && wineboot --init 2>&1 || true \
     && wineserver -w \
-    && wine64 --version
+    && wine64 --version \
+    # ---- explicit UCRT DLL overrides in the registry (belt + suspenders) ----
+    && echo "[build] writing UCRT DLL overrides into registry..." \
+    && for dll in ucrtbase api-ms-win-crt-runtime-l1-1-0 api-ms-win-crt-private-l1-1-0; do \
+         wine64 reg add 'HKCU\Software\Wine\DllOverrides' \
+            /v "${dll}" /t REG_SZ /d "native,builtin" /f; \
+       done \
+    && wine64 reg add 'HKCU\Software\Wine\DllOverrides' \
+            /v "*api-ms-win-crt*" /t REG_SZ /d "native,builtin" /f
 
 # --------------------------------------------------------------------------
 # UCRT INSTALL via winetricks, FORCED 64-BIT (no i386 / wine32)
 # --------------------------------------------------------------------------
-# Railway's kernel forbids 32-bit execution, so winetricks must run purely
-# under the 64-bit Wine loader. We force WINEARCH=win64 and skip any 32-bit
-# prefix work; vcrun2019 provides ucrtbase.dll + api-ms-win-crt-*.dll for the
-# 64-bit side only. If winetricks still fails (e.g. it pulls a 32-bit dep),
+# WineHQ 9.0 already carries modern UCRT support, but we still install
+# vcrun2019 as the native runtime source (forced win64). If winetricks fails,
 # we fall back to downloading pre-extracted 64-bit UCRT DLLs and injecting
 # them directly into system32.
 RUN echo "[build] installing UCRT (vcrun2019) via winetricks, forced win64..." \
@@ -92,8 +112,6 @@ RUN echo "[build] installing UCRT (vcrun2019) via winetricks, forced win64..." \
          unzip -o -j /tmp/ucrt/ucrt.zip '*.dll' -d /tmp/ucrt 2>/dev/null || true; \
          find /tmp/ucrt -type f \( -iname 'ucrtbase.dll' -o -iname 'api-ms-win-crt-*.dll' \) \
             -exec cp -v {} /root/.wine/drive_c/windows/system32/ \; ; \
-         wine64 reg add 'HKCU\Software\Wine\DllOverrides' \
-            /v "ucrtbase" /t REG_SZ /d "native" /f 2>/dev/null || true; \
          echo "[build] UCRT fallback injection complete"; \
          rm -rf /tmp/ucrt; \
        }
@@ -134,7 +152,7 @@ WORKDIR /opt/mt5bridge
 
 # ---- Download the MT5 portable archive at BUILD TIME ----
 # The portable directory is NOT committed to Git (terminal64.exe > 100MB).
-# It is fetched from Google Drive and extracted straight into the Wine C:
+# It is fetched from MediaFire and extracted straight into the Wine C:
 # drive so the terminal lives at C:\MetaTrader5\terminal64.exe. The UCRT
 # native DLLs injected earlier are still required for it to run.
 RUN echo "[build] Downloading MT5 portable from MediaFire..." \
