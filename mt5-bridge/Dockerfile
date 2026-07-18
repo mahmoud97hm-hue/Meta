@@ -51,6 +51,9 @@ RUN dpkg --add-architecture i386 \
     && apt-get install -y --no-install-recommends \
         winehq-stable \
     && rm -rf /var/lib/apt/lists/* \
+    # ---- symlink Wine binaries into /usr/local/bin (always on PATH) ----
+    && ln -sf /opt/wine-stable/bin/wine /usr/local/bin/wine \
+    && ln -sf /opt/wine-stable/bin/wine64 /usr/local/bin/wine64 \
     # ---- verify Wine is on PATH ----
     && wine64 --version \
     # --------------------------------------------------------------------------
