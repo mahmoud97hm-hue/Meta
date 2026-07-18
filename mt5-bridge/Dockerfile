@@ -72,16 +72,7 @@ WORKDIR /opt/mt5bridge
 #    into MT5_DIR without a GUI and without prompting.
 # 3. The MetaTrader5 Python lib later calls mt5.initialize(server=...) to
 #    download the broker-specific datacenter config on first login.
-RUN mkdir -p /opt/mt5/install /opt/mt5/terminal \
-    && curl -fsSL -o /opt/mt5/install/mt5setup.exe \
-        "https://download.mql5.com/cdn/web/ilhamov.fl/installer/mt5setup.exe" \
-    || curl -fsSL -o /opt/mt5/install/mt5setup.exe \
-        "https://www.metatrader5.com/en/download/file/2024/mt5setup.exe" \
-    && echo "[build] MT5 installer downloaded" \
-    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe \
-        /portable /silent /skipupdate /dir="C:\\terminal" \
-    && echo "[build] MT5 installed headlessly" \
-    && rm -rf /opt/mt5/install
+RUN mkdir -p /opt/mt5/install /opt/mt5/terminal && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe" && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
 
 # ---- Bridge server + deps ----
 COPY server.py     /opt/mt5bridge/server.py
