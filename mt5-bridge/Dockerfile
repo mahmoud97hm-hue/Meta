@@ -68,7 +68,7 @@ RUN mkdir -p /opt/winpy /opt/mt5/install /opt/whl \
     && echo "[build] enabling site-packages in embeddable Python (uncomment import site)" \
     && sed -i 's/^#import site/import site/' /root/.wine/drive_c/Python310/python310._pth \
     && echo "[build] downloading WINDOWS wheels with native pip3 (no Wine networking)..." \
-    && pip3 install --no-cache-dir --break-system-packages --target=/opt/whl pip setuptools wheel \
+    && pip3 install --no-cache-dir --target=/opt/whl pip setuptools wheel \
     && pip3 download --no-cache-dir --dest=/opt/whl \
         --platform win_amd64 --python-version 310 --abi cp310 --only-binary=:all: \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
