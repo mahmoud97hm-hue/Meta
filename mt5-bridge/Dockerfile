@@ -34,7 +34,6 @@ RUN apk add --no-cache \
         font-dejavu \
         && apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/v3.20/community \
         wine \
-        winetricks \
     && rm -rf /var/cache/apk/*
 
 # ---------------------------------------------------------------------------
@@ -51,7 +50,11 @@ RUN apk add --no-cache \
 # ---------------------------------------------------------------------------
 ENV WINEPYTHON=C:\\Python311
 
-RUN echo "[build] priming Wine prefix + installing UCRT (fixes ucrtbase.crealf)..." \
+RUN echo "[build] fetching winetricks script (apk has no winetricks pkg)..." \
+    && curl -fsSL -o /usr/local/bin/winetricks \
+        "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks" \
+    && chmod +x /usr/local/bin/winetricks \
+    && echo "[build] priming Wine prefix + installing UCRT (fixes ucrtbase.crealf)..." \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all winetricks -q ucrtbase \
     && mkdir -p /opt/winpy /opt/mt5/install \
     && curl -fsSL -o /opt/winpy/python311.zip \
