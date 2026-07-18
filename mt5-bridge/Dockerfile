@@ -53,7 +53,7 @@ RUN mkdir -p /opt/winpy /opt/mt5/install \
         "https://www.python.org/ftp/python/3.11.4/python-3.11.4-amd64.exe" \
     && echo "[build] Windows Python installer downloaded" \
     && echo "[build] installing Windows Python 3.11 into C:\\Python311 via Wine..." \
-    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/winpy/python311.exe \
+    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 Z:\\opt\\winpy\\python311.exe \
         /quiet TargetDir=C:\\Python311 PrependPath=0 Include_pip=1 Include_launcher=0 \
     && echo "[build] installing MetaTrader5 + socketio + uvicorn into Wine Python..." \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
