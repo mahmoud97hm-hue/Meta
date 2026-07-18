@@ -29,7 +29,7 @@ launch_server() {
     MT5_LOGIN="${MT5_LOGIN}" MT5_PASSWORD="${MT5_PASSWORD}" MT5_SERVER="${MT5_SERVER}" \
     BRIDGE_API_KEY="${BRIDGE_API_KEY}" \
     WINEPREFIX=/root/.wine WINEDEBUG=-all \
-    wine64 C:\\Python311\\python.exe /opt/mt5bridge/server.py &
+    wine64 C:\\Python310\\python.exe /opt/mt5bridge/server.py &
   echo $!
 }
 

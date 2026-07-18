@@ -1,15 +1,13 @@
 # mt5-bridge/Dockerfile — HEADLESS, VNC-FREE, SELF-CONTAINED MT5 bridge
 #
-# Built for Railway (Linux/amd64). Optimizations vs upstream FortesenseLabs:
-#   * NO VNC server, NO Openbox WM, NO x11vnc/websockify -> saves ~150-250MB RAM
-#   * Xvfb virtual display only (MT5 needs a display); no network VNC listener
-#   * MT5 installed AUTOMATICALLY at build time (no Windows machine needed):
-#       - official MetaQuotes installer fetched via curl (license-compliant;
-#         we never redistribute MetaQuotes binaries)
-#       - installed silently under Wine into /opt/mt5/terminal
-#   * Broker config (server/datacenter) is fetched at runtime by the
-#     MetaTrader5 Python lib via mt5.initialize(server="<BROKER-SERVER>")
-#   * Single Python socket.io server + MT5; minimal footprint.
+# Built for Railway (Linux/amd64).
+#   * NO VNC, NO WM — Xvfb virtual display only.
+#   * MT5 installed AUTOMATICALLY at build time under Wine into C:\terminal.
+#   * A WINDOWS Python 3.10.11 (embeddable) runs INSIDE Wine; the Windows-only
+#     MetaTrader5 package is pip-installed into it. server.py runs via
+#     `wine64 C:\Python310\python.exe`.
+#   * Python 3.10 links the UCRT that Wine already ships, so NO winetricks /
+#     ucrtbase patching is required (3.11 needed crealf which Wine lacked).
 
 FROM alpine:3.20
 
@@ -22,7 +20,7 @@ ENV LANG=C.UTF-8 \
     MT5_TERMINAL_PATH=/opt/mt5/terminal/terminal64.exe \
     MT5_DIR=/opt/mt5/terminal
 
-# ---- system deps: xvfb (virtual display) + wine + winetricks + tools ----
+# ---- system deps: xvfb (virtual display) + wine + tools ----
 RUN apk add --no-cache \
         bash \
         coreutils \
@@ -37,78 +35,41 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # ---------------------------------------------------------------------------
-# Install a WINDOWS Python 3.11 inside the Wine prefix (HEADLESS).
+# Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS).
 # The MetaTrader5 PyPI package is Windows-only (it loads terminal DLLs), so
 # server.py MUST run under Wine's Windows Python, NOT Alpine's native python3.
 #
 # We use the EMBEDDABLE zip (no GUI installer -> no ShellExecute/display
-# issues under headless Wine). The embeddable build links a newer UCRT than
-# Wine ships (ucrtbase.dll.crealf), so we install the UCRT into the prefix
-# via `winetricks ucrtbase` BEFORE running Python. That provides crealf and
-# avoids the crash. We then enable site-packages via python311._pth and
-# bootstrap pip + the required packages.
+# issues under headless Wine). Python 3.10 links the UCRT Wine already
+# provides, so no winetricks/ucrtbase patching is needed. We enable
+# site-packages via python310._pth and bootstrap pip + the required packages.
 # ---------------------------------------------------------------------------
-ENV WINEPYTHON=C:\\Python311
+ENV WINEPYTHON=C:\\Python310
 
-RUN echo "[build] fetching winetricks script (apk has no winetricks pkg)..." \
-    && curl -fsSL -o /usr/local/bin/winetricks \
-        "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks" \
-    && chmod +x /usr/local/bin/winetricks \
-    && echo "[build] priming Wine prefix + installing UCRT (fixes ucrtbase.crealf)..." \
-    && WINEPREFIX=/root/.wine WINEDEBUG=-all winetricks -q ucrtbase \
-    && mkdir -p /opt/winpy /opt/mt5/install \
-    && curl -fsSL -o /opt/winpy/python311.zip \
-        "https://www.python.org/ftp/python/3.11.4/python-3.11.4-embed-amd64.zip" \
-    && echo "[build] Windows Python (embeddable) downloaded" \
-    && mkdir -p /root/.wine/drive_c/Python311 \
-    && unzip -o /opt/winpy/python311.zip -d /root/.wine/drive_c/Python311/ \
+RUN mkdir -p /opt/winpy /opt/mt5/install \
+    && curl -fsSL -o /opt/winpy/python310.zip \
+        "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip" \
+    && echo "[build] Windows Python 3.10.11 (embeddable) downloaded" \
+    && mkdir -p /root/.wine/drive_c/Python310 \
+    && unzip -o /opt/winpy/python310.zip -d /root/.wine/drive_c/Python310/ \
     && echo "[build] enabling site-packages in embeddable Python (uncomment import site)" \
-    && sed -i 's/^#import site/import site/' /root/.wine/drive_c/Python311/python311._pth \
-    && curl -fsSL -o /root/.wine/drive_c/Python311/get-pip.py \
+    && sed -i 's/^#import site/import site/' /root/.wine/drive_c/Python310/python310._pth \
+    && curl -fsSL -o /root/.wine/drive_c/Python310/get-pip.py \
         "https://bootstrap.pypa.io/get-pip.py" \
     && echo "[build] bootstrapping pip in Wine Python..." \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
-        C:\\Python311\\python.exe C:\\Python311\\get-pip.py --no-warn-script-location \
+        C:\\Python310\\python.exe C:\\Python310\\get-pip.py --no-warn-script-location \
     && echo "[build] installing MetaTrader5 + socketio + uvicorn into Wine Python..." \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
-        C:\\Python311\\python.exe -m pip install --no-cache-dir \
+        C:\\Python310\\python.exe -m pip install --no-cache-dir \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
     && echo "[build] Wine Python + MetaTrader5 ready" \
     && rm -rf /opt/winpy /opt/mt5/install
 
-# ===========================================================================
-# OPTIONAL winetricks bootstrap layer (COMMENTED OUT BY DEFAULT — keep the
-# image lean for Railway RAM limits). Enable ONLY if the silent mt5setup.exe
-# install hangs or crashes due to missing fonts / .NET (mono) / VC++ runtimes.
-#
-# To enable: uncomment the two RUN blocks below. They install winetricks +
-# corefonts + wine-mono + common VC++ runtimes, then prime the Wine prefix
-# with `wineboot` so the first real MT5 launch doesn't trigger interactive
-# first-run setup dialogs.
-# ---------------------------------------------------------------------------
-# RUN apk add --no-cache --repository https://dl-cdn.alpinelinux.org/alpine/v3.20/community \
-#         winetricks \
-#     && apk add --no-cache \
-#         ttf-dejavu \
-#         ttf-liberation \
-#         terminus-font \
-#         && rm -rf /var/cache/apk/*
-#
-# RUN WINEPREFIX=/root/.wine WINEDEBUG=-all winetricks -q \
-#         corefonts vcrun2015 winhttp \
-#     && WINEPREFIX=/root/.wine WINEDEBUG=-all wineboot --init \
-#     && echo "[build] winetricks bootstrap complete"
-# ===========================================================================
-
 WORKDIR /opt/mt5bridge
 
 # ---- Auto-install the MT5 terminal at BUILD TIME (no Windows host required) ----
-# 1. Fetch the official MetaQuotes MT5 installer from the public CDN.
-# 2. Run it silently under Wine with /portable so it extracts the terminal
-#    into MT5_DIR without a GUI and without prompting.
-# 3. The MetaTrader5 Python lib later calls mt5.initialize(server=...) to
-#    download the broker-specific datacenter config on first login.
-RUN mkdir -p /opt/mt5/install /opt/mt5/terminal && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe" && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
+RUN mkdir -p /opt/mt5/install && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe" && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
 
 # ---- Bridge server (runs under Wine Python at runtime) ----
 COPY server.py     /opt/mt5bridge/server.py
@@ -118,5 +79,4 @@ RUN chmod +x /opt/mt5bridge/entrypoint.sh
 
 EXPOSE 3000
 
-# Memory watchdog: if RSS exceeds 1.8G the entrypoint restarts MT5 cleanly.
 ENTRYPOINT ["/opt/mt5bridge/entrypoint.sh"]
