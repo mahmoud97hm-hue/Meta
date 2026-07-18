@@ -21,7 +21,8 @@ ENV LANG=C.UTF-8 \
     MT5_TERMINAL_PATH=/opt/mt5/terminal/terminal64.exe \
     MT5_DIR=/opt/mt5/terminal \
     PYTHONHASHSEED=0 \
-    XDG_RUNTIME_DIR=/tmp
+    XDG_RUNTIME_DIR=/tmp \
+    PATH="/usr/lib/wine:/usr/bin:/usr/local/bin:${PATH}"
 
 # ---- system deps: xvfb + native wine64 + python3 + tools ----
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -46,8 +47,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wine64 \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- initialize Wine prefix (generates kernel32.dll, avoids c0000135) ----
-RUN echo "[build] initializing 64-bit Wine prefix..." \
+# ---- locate Wine binaries and add them to PATH before using them ----
+RUN echo "[build] locating Wine binaries..." \
+    && WINE_PATH=$(find /usr/lib -name 'wine' -type d 2>/dev/null | head -1) \
+    && echo "[build] wine binary dir: ${WINE_PATH}" \
+    && export PATH="${WINE_PATH}:/usr/lib/wine:$PATH" \
+    && echo "[build] verifying wine/wine64/wineboot/wineserver are on PATH:" \
+    && which wine wine64 wineboot wineserver \
+    # ---- initialize Wine prefix (generates kernel32.dll, avoids c0000135) ----
+    && echo "[build] initializing 64-bit Wine prefix..." \
     && wineboot --init 2>&1 || true \
     && wineserver -w \
     && wine64 --version
@@ -87,7 +95,7 @@ RUN mkdir -p /opt/winpy /opt/mt5/install /opt/whl \
 WORKDIR /opt/mt5bridge
 
 # ---- Auto-install the MT5 terminal at BUILD TIME (no Windows host required) ----
-RUN mkdir -p /opt/mt5/install && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe" && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
+RUN mkdir -p /opt/mt5/install && curl -fsSL -o /opt/mt5/install/mt5setup.exe "https://download.metatrader.com/cdn/web/fundingpips.corp.2/mt5/fundingpips25setup.exe" && echo "[build] MT5 installer downloaded" && WINEPREFIX=/root/.wine WINEARCH=win64 WINEDEBUG=-all wine64 /opt/mt5/install/mt5setup.exe /portable /silent /skipupdate /dir="C:\terminal" && echo "[build] MT5 installed headlessly" && rm -rf /opt/mt5/install
 
 # ---- Bridge server (runs under Wine Python at runtime) ----
 COPY server.py     /opt/mt5bridge/server.py
