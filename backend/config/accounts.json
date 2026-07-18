@@ -1,0 +1,12 @@
+{
+  "accounts": {
+    "funding_pips_account": {
+      "login": 12345,
+      "password": "YOUR_PASSWORD_HERE",
+      "server": "FundingPips-Server",
+      "broker": "FundingPips",
+      "platform": "mt5",
+      "assigned_terminal": "terminal_1"
+    }
+  }
+}

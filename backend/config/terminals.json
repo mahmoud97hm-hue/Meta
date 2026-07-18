@@ -1,0 +1,13 @@
+{
+  "terminals": {
+    "terminal_1": {
+      "id": "terminal_1",
+      "host": "127.0.0.1",
+      "port": 8091,
+      "mt5_path": "/root/.wine-mt5-terminal1/drive_c/MetaTrader5/terminal64.exe",
+      "wine_prefix": "/root/.wine-mt5-terminal1",
+      "max_accounts": 1,
+      "broker": "FundingPips"
+    }
+  }
+}

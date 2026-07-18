@@ -1,0 +1,9 @@
+# Backend bridge runtime dependencies (installed into Wine-embedded Python
+# at build time; listed here for reference / local development).
+MetaTrader5==5.0.45
+python-socketio==5.11.4
+aiohttp
+uvicorn
+fastapi
+redis
+colorama
