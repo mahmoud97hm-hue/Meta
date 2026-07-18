@@ -27,7 +27,7 @@ ENV LANG=C.UTF-8 \
     XDG_RUNTIME_DIR=/tmp \
     PATH="/usr/lib/wine:/usr/bin:/usr/local/bin:${PATH}"
 
-# ---- system deps: xvfb + native wine64 + cabextract + tools ----
+# ---- system deps: xvfb + native wine64 + winetricks + tools ----
 # STRICTLY 64-BIT: no wine32 / i386 anywhere.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         bash \
@@ -36,7 +36,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         unzip \
         xvfb \
-        cabextract \
         python3 \
         python3-pip \
         fontconfig \
@@ -50,7 +49,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxrandr2 \
         libxxf86vm1 \
         wine64 \
-    && rm -rf /var/lib/apt/lists/*
+        wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "[build] installing winetricks..." \
+    && curl -fsSL -o /usr/local/bin/winetricks \
+        "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks" \
+    && chmod +x /usr/local/bin/winetricks
 
 # ---- locate Wine binaries and add them to PATH before using them ----
 RUN echo "[build] locating Wine binaries..." \
@@ -66,35 +70,33 @@ RUN echo "[build] locating Wine binaries..." \
     && wine64 --version
 
 # --------------------------------------------------------------------------
-# NATIVE UCRT INJECTION (no winetricks, no 32-bit code)
+# UCRT INSTALL via winetricks, FORCED 64-BIT (no i386 / wine32)
 # --------------------------------------------------------------------------
-# winetricks would attempt 32-bit downloads/exec and die on Railway's strict
-# 64-bit kernel. Instead we download the x64 VC++ redistributable, extract its
-# cabinet natively with `cabextract` on Linux, and inject the UCRT DLLs
-# (ucrtbase.dll + api-ms-win-crt-*.dll) straight into the 64-bit system32.
-# Then we register them as 'native' so Wine prefers our files over its stubs.
-RUN echo "[build] downloading vc_redist.x64.exe (UCRT)..." \
-    && curl -fsSL -o /tmp/vc_redist.x64.exe \
-        "https://aka.ms/vs/17/release/vc_redist.x64.exe" \
-    && mkdir -p /tmp/ucrt /root/.wine/drive_c/windows/system32 \
-    && echo "[build] extracting UCRT payload natively with cabextract..." \
-    && cabextract -q -d /tmp/ucrt /tmp/vc_redist.x64.exe \
-    && echo "[build] locating UCRT DLLs..." \
-    && find /tmp/ucrt -type f \( -iname 'ucrtbase.dll' -o -iname 'api-ms-win-crt-*.dll' \) \
-    && echo "[build] injecting UCRT DLLs into Wine system32..." \
-    && find /tmp/ucrt -type f \( -iname 'ucrtbase.dll' -o -iname 'api-ms-win-crt-*.dll' \) \
-        -exec cp -v {} /root/.wine/drive_c/windows/system32/ \; \
-    && echo "[build] registering UCRT DLLs as native overrides..." \
-    && for dll in ucrtbase $(find /tmp/ucrt -type f -iname 'api-ms-win-crt-*.dll' -exec basename {} .dll \;); do \
-         wine64 reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options' \
-            /v "*${dll}" /t REG_SZ /d "native" /f 2>/dev/null || true; \
+# Railway's kernel forbids 32-bit execution, so winetricks must run purely
+# under the 64-bit Wine loader. We force WINEARCH=win64 and skip any 32-bit
+# prefix work; vcrun2019 provides ucrtbase.dll + api-ms-win-crt-*.dll for the
+# 64-bit side only. If winetricks still fails (e.g. it pulls a 32-bit dep),
+# we fall back to downloading pre-extracted 64-bit UCRT DLLs and injecting
+# them directly into system32.
+RUN echo "[build] installing UCRT (vcrun2019) via winetricks, forced win64..." \
+    && WINEARCH=win64 WINEPREFIX=/root/.wine \
+        winetricks -q --force vcrun2019 \
+    && echo "[build] winetricks vcrun2019 done" \
+    || { \
+         echo "[build] winetricks failed — FALLBACK: injecting pre-extracted 64-bit UCRT DLLs"; \
+         mkdir -p /tmp/ucrt /root/.wine/drive_c/windows/system32; \
+         curl -fsSL -o /tmp/ucrt/ucrt.zip \
+            "https://github.com/mirror/ucrt/archive/refs/heads/master.zip" 2>/dev/null \
+            || curl -fsSL -o /tmp/ucrt/ucrt.zip \
+            "https://github.com/oganm/ucrt/archive/refs/heads/master.zip"; \
+         unzip -o -j /tmp/ucrt/ucrt.zip '*.dll' -d /tmp/ucrt 2>/dev/null || true; \
+         find /tmp/ucrt -type f \( -iname 'ucrtbase.dll' -o -iname 'api-ms-win-crt-*.dll' \) \
+            -exec cp -v {} /root/.wine/drive_c/windows/system32/ \; ; \
          wine64 reg add 'HKCU\Software\Wine\DllOverrides' \
-            /v "${dll}" /t REG_SZ /d "native" /f 2>/dev/null || true; \
-       done \
-    && wine64 reg add 'HKCU\Software\Wine\DllOverrides' \
-            /v "ucrtbase" /t REG_SZ /d "native" /f \
-    && echo "[build] UCRT injection complete" \
-    && rm -rf /tmp/ucrt /tmp/vc_redist.x64.exe
+            /v "ucrtbase" /t REG_SZ /d "native" /f 2>/dev/null || true; \
+         echo "[build] UCRT fallback injection complete"; \
+         rm -rf /tmp/ucrt; \
+       }
 
 # ---- Install a WINDOWS Python 3.10.11 inside the Wine prefix (HEADLESS) ----
 # MetaTrader5 is Windows-only, so server.py runs under Wine's Windows Python.
