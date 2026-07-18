@@ -30,6 +30,7 @@ RUN apk add --no-cache \
         ca-certificates \
         unzip \
         p7zip \
+        py3-pip \
         xvfb \
         mesa-dri-gallium \
         font-dejavu \
@@ -70,7 +71,7 @@ RUN mkdir -p /opt/ucrt /root/.wine/drive_c/windows/system32 \
 # ---------------------------------------------------------------------------
 ENV WINEPYTHON=C:\\Python310
 
-RUN mkdir -p /opt/winpy /opt/mt5/install \
+RUN mkdir -p /opt/winpy /opt/mt5/install /opt/whl \
     && curl -fsSL -o /opt/winpy/python310.zip \
         "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip" \
     && echo "[build] Windows Python 3.10.11 (embeddable) downloaded" \
@@ -78,17 +79,18 @@ RUN mkdir -p /opt/winpy /opt/mt5/install \
     && unzip -o /opt/winpy/python310.zip -d /root/.wine/drive_c/Python310/ \
     && echo "[build] enabling site-packages in embeddable Python (uncomment import site)" \
     && sed -i 's/^#import site/import site/' /root/.wine/drive_c/Python310/python310._pth \
-    && curl -fsSL -o /root/.wine/drive_c/Python310/get-pip.py \
-        "https://bootstrap.pypa.io/get-pip.py" \
-    && echo "[build] bootstrapping pip in Wine Python..." \
+    && echo "[build] downloading WINDOWS wheels with native pip (no Wine networking)..." \
+    && pip3 install --no-cache-dir --break-system-packages --target=/opt/whl pip setuptools wheel \
+    && pip3 download --no-cache-dir --break-system-packages --dest=/opt/whl \
+        --platform win_amd64 --python-version 310 --abi cp310 --only-binary=:all: \
+        "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
+    && echo "[build] offline-installing packages into Wine Python (no network under Wine)..." \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
-        C:\\Python310\\python.exe C:\\Python310\\get-pip.py --no-warn-script-location \
-    && echo "[build] installing MetaTrader5 + socketio + uvicorn into Wine Python..." \
-    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine64 \
-        C:\\Python310\\python.exe -m pip install --no-cache-dir \
+        C:\\Python310\\python.exe -m pip install --no-index --find-links=Z:\\opt\\whl \
+        pip setuptools wheel \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
     && echo "[build] Wine Python + MetaTrader5 ready" \
-    && rm -rf /opt/winpy /opt/mt5/install
+    && rm -rf /opt/winpy /opt/mt5/install /opt/whl
 
 WORKDIR /opt/mt5bridge
 
