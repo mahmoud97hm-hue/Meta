@@ -136,18 +136,8 @@ WORKDIR /opt/mt5bridge
 # It is fetched from Google Drive and extracted straight into the Wine C:
 # drive so the terminal lives at C:\MetaTrader5\terminal64.exe. The UCRT
 # native DLLs injected earlier are still required for it to run.
-# NOTE: Google Drive returns a virus-scan confirmation page (HTML, not the
-# zip) for large files. The -L follow-redirect plus the confirm-token swap
-# below handles that; we also verify the download is actually a zip.
 RUN echo "[build] Downloading MT5 portable from Google Drive..." \
     && curl -L -o /tmp/mt5_portable.zip "https://docs.google.com/uc?export=download&id=1ROfOX1E0M03AeD1Gwfk3kiWLQSESS8Ok" \
-    && if file /tmp/mt5_portable.zip | grep -qi html; then \
-         echo "[build] GDrive confirmation detected — following confirm token..."; \
-         CONFIRM=$(grep -o 'confirm=[^&]*' /tmp/mt5_portable.zip | head -1 | cut -d= -f2); \
-         curl -L -o /tmp/mt5_portable.zip \
-            "https://docs.google.com/uc?export=download&id=1ROfOX1E0M03AeD1Gwfk3kiWLQSESS8Ok&confirm=${CONFIRM}"; \
-       fi \
-    && file /tmp/mt5_portable.zip \
     && echo "[build] Extracting MT5 archive..." \
     && mkdir -p /root/.wine/drive_c/MetaTrader5 \
     && unzip -q /tmp/mt5_portable.zip -d /root/.wine/drive_c/MetaTrader5/ \
