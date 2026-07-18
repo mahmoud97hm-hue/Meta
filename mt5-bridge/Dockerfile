@@ -82,13 +82,13 @@ RUN dpkg --add-architecture i386 \
         --platform win_amd64 --python-version 310 --abi cp310 --only-binary=:all: \
         pip setuptools wheel \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
-    && echo "[build] offline-installing packages into Wine Python (no network under Wine)..." \
+    && echo "[build] unzipping pip/setuptools/wheel directly into Wine Python site-packages..." \
+    && mkdir -p /root/.wine/drive_c/Python310/Lib/site-packages \
+    && unzip -q /opt/whl/pip-*.whl -d /root/.wine/drive_c/Python310/Lib/site-packages/ \
+    && unzip -q /opt/whl/setuptools-*.whl -d /root/.wine/drive_c/Python310/Lib/site-packages/ \
+    && unzip -q /opt/whl/wheel-*.whl -d /root/.wine/drive_c/Python310/Lib/site-packages/ \
+    && echo "[build] installing MetaTrader5 + socketio + uvicorn into Wine Python..." \
     && export XDG_RUNTIME_DIR=/tmp \
-    && PIP_WHL_Z=$(ls /opt/whl/pip-*.whl | head -1 | sed 's|^/|Z:/|; s|/|\\\\|g') \
-    && echo "[build] bootstrapping pip from wheel: ${PIP_WHL_Z}" \
-    && WINEPREFIX=/root/.wine WINEDEBUG=-all wine \
-        C:\\Python310\\python.exe "${PIP_WHL_Z}\\pip" install \
-        --no-index --find-links=Z:\\opt\\whl pip setuptools wheel \
     && WINEPREFIX=/root/.wine WINEDEBUG=-all wine \
         C:\\Python310\\python.exe -m pip install --no-index --find-links=Z:\\opt\\whl \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" \
