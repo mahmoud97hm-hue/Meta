@@ -86,9 +86,9 @@ RUN echo "[build] Downloading MT5 portable from MediaFire..." \
 # ---- install Visual C++ 2015-2022 redistributable (required by modern MT5) ----
 RUN echo "[build] Downloading VC++ redistributable..." \
     && curl -L -o /tmp/vc_redist.x64.exe "https://aka.ms/vs/17/release/vc_redist.x64.exe" \
+    && chmod +x /tmp/vc_redist.x64.exe \
     && echo "[build] Installing VC++ redistributable into Wine prefix..." \
-    && xvfb-run -a wine /tmp/vc_redist.x64.exe /q /norestart \
-    && wineserver -w \
+    && xvfb-run -a sh -c "WINEPREFIX=/root/.wine-mt5-terminal1 WINEARCH=win64 wine /tmp/vc_redist.x64.exe /q /norestart && WINEPREFIX=/root/.wine-mt5-terminal1 wineserver -w" \
     && rm /tmp/vc_redist.x64.exe \
     && echo "[build] VC++ runtime installation complete."
 
