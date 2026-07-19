@@ -25,23 +25,23 @@ ENV LANG=C.UTF-8 \
     REDIS_URL=redis://127.0.0.1:6379/0 \
     PYTHONHASHSEED=0 \
     XDG_RUNTIME_DIR=/tmp \
-    PATH="/usr/lib/wine:/opt/wine-staging/bin:/opt/wine-stable/bin:/usr/bin:/usr/local/bin:${PATH}"
+    PATH="/usr/lib/wine:/opt/wine-stable/bin:/usr/bin:/usr/local/bin:${PATH}"
 
-# ---- system deps: wine64 + redis + python3 (host) + tools ----
+# ---- system deps: WineHQ (stable) + redis + python3 + tools ----
 # Note: the bridge itself runs under Wine's embedded Python, but we keep
 # native python3/pip for the offline wheel download step.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
         bash coreutils curl ca-certificates unzip xvfb \
         redis-server python3 python3-pip fontconfig fonts-dejavu-core \
         libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender1 libxi6 \
-        libxrandr2 libxxf86vm1 wget software-properties-common \
-    && rm -rf /var/lib/apt/lists/*
-
-# ---- install WineHQ staging (Wine 9.x) ----
-RUN wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
+        libxrandr2 libxxf86vm1 wget gnupg2 software-properties-common cabextract \
+    && mkdir -pm755 /etc/apt/keyrings \
+    && wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
     && wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/jammy/winehq-jammy.sources \
     && apt-get update \
-    && apt-get install -y --no-install-recommends wine-staging-amd64 \
+    && apt-get install -y --install-recommends winehq-stable \
     && rm -rf /var/lib/apt/lists/*
 
 # ---- initialize Wine prefix + set Windows 10 mode ----
