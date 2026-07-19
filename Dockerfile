@@ -70,7 +70,7 @@ RUN mkdir -p /opt/winpy /opt/whl \
 
 # ---- download + extract MT5 terminal (MediaFire) ----
 RUN echo "[build] Downloading MT5 portable from MediaFire..." \
-    && curl -L -o /tmp/mt5_portable.zip "https://download1336.mediafire.com/9tb8b4scinwg_e1ZbYoVCEzQOndXbFc6KUWS8g7KSnTxu_v8VWSID-BTENcPcPsr2-TJV2Lt1ai48nfwJOAINciJvqONgbIKQtOcEcPdRy9KXmsVUdolBxZeBLW0lzpRN95312HfhNNKSujxz9iK33Om1sq_GNlGZfIjxJnI1nDikw/95pxuqd3nzegjs1/FundingPips+2+MT5+Terminal.zip" \
+    && curl -L -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" -o /tmp/mt5_portable.zip "https://download1336.mediafire.com/t28n4007b17g6zqmVmLgjCK-q3fUncc6ZvDGgrp9CaGwvM7Bu8aGXysNvDSxrCU7k_TXYC5SpeQNYmXJ4WYfh7rOhgsVSk9KOarG9Pvixt0bEE0UmnFeTJLuipTFI7IGqXECGgjAwaTkn6A1Jrt9_DEXJSFNAT4yTU4Zx74hzGxxGQ/95pxuqd3nzegjs1/FundingPips+2+MT5+Terminal.zip" \
     && echo "[build] Extracting MT5 archive..." \
     && mkdir -p /root/.wine-mt5-terminal1/drive_c/MetaTrader5 \
     && unzip -q /tmp/mt5_portable.zip -d /root/.wine-mt5-terminal1/drive_c/MetaTrader5/ \
