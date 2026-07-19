@@ -54,11 +54,31 @@ def _require_env(name: str) -> str:
     return val
 
 
+<<<<<<< HEAD
 MT5_BRIDGE_URL  = _require_env('MT5_BRIDGE_URL')
 MT5_ACCOUNT_ID  = _require_env('MT5_ACCOUNT_ID')
 TG_TOKEN       = _require_env('TG_TOKEN')
 OANDA_ACCOUNT  = _require_env('OANDA_ACCOUNT')
 OANDA_TOKEN    = _require_env('OANDA_TOKEN')
+=======
+def _optional_env(name: str) -> str | None:
+    """Read an env var that is no longer required after the MetaApi -> local
+    MT5 bridge migration. Returns None when absent so legacy code paths that
+    reference it degrade gracefully instead of crashing at import time."""
+    return os.environ.get(name) or None
+
+
+# --- Strictly required for the local-MT5 bridge bot to operate ---
+TG_TOKEN    = _require_env('TG_TOKEN')       # Telegram alerts + remote control
+OANDA_TOKEN = _require_env('OANDA_TOKEN')    # historical candle backfills
+
+# --- Legacy MetaApi credentials (REMOVED from mandatory bootstrap) ---
+# Kept as optional so any residual reference degrades gracefully and we never
+# ship dummy secrets. The self-hosted DWXConnect bridge replaces MetaApi.
+METAAPI_TOKEN = _optional_env('METAAPI_TOKEN')
+ACCOUNT_ID    = _optional_env('ACCOUNT_ID')
+OANDA_ACCOUNT = _optional_env('OANDA_ACCOUNT')
+>>>>>>> origin/main
 AVAILABLE_SYMBOLS = ['XAU_USD', 'XAU_EUR', 'XAG_USD', 'EUR_USD', 'GBP_JPY',
                      'GBP_AUD', 'GBP_NZD', 'AUD_JPY', 'NZD_JPY']
 SYMBOL_INFO = {

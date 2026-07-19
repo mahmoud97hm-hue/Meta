@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Secrets / local env
+.env
+
+# Large binary artifacts (never commit)
+mt5_portable/
+*.exe
+*.zip

@@ -1,5 +1,6 @@
 """
 execution.py — Order execution, trade management, fill monitoring, and tick-level
+<<<<<<< HEAD
 trade dispatch via mt5-bridge REST API.
 
 Owns:
@@ -9,15 +10,33 @@ Owns:
   - _close_metaapi_trade / _close_metaapi_trades_batch
   - _fill_monitor_loop (polling-based fill detection via bridge)
   - _ExecTracker (execution quality metrics)
+=======
+trade dispatch over the self-hosted DWXConnect MT5 bridge.
+
+Owns:
+  - _execute_smart_order (limit/market/FOK with IOC emulation)
+  - _gann_open_trade (full entry lifecycle)
+  - _gann_tick_fire_check (tick-driven level-touch detection)
+  - _close_metaapi_trade / _close_metaapi_trades_batch  (close via bridge)
+  - _fill_monitor_loop (event-driven fill detection via bridge.get_positions)
+  - _ExecTracker (execution quality metrics)
+
+All order routing now flows through mt5_bridge.MT5ExecutionClient, which maps
+high-level intents onto DWXConnect MT_ORDER_SEND payloads using the
+Correlation-ID command dispatcher. No MetaApi dependency remains.
+>>>>>>> origin/main
 """
 
 import asyncio
 import time
 from datetime import datetime, timedelta, timezone
 
+<<<<<<< HEAD
 from mt5_bridge_client import (
     get_bridge_client, BridgeHTTPError, BridgeConnectionError, configure_bridge_client,
 )
+=======
+>>>>>>> origin/main
 from state import (
     bot_state, SYMBOL_INFO, CONN_RUNNING, CONN_HALTED, CONN_READ_ONLY,
     _daily_state_lock, _fail_counter_lock, _safe_float, _safe_task,
@@ -28,6 +47,10 @@ from market_data import (
     live_quotes, _lq_price_with_fallback,
     _resolve_broker_symbol, _tick_semaphore, _gann_cache,
 )
+<<<<<<< HEAD
+=======
+from mt5_bridge import get_execution_client
+>>>>>>> origin/main
 from strategy import (
     _gann_calc_tpsl, _gann_tf_tp, _gann_tf_sl,
     core_eval_break_even, core_eval_outcome,
@@ -90,6 +113,7 @@ async def _fill_monitor_loop():
             await asyncio.sleep(0.05)
             if not _fill_events:
                 continue
+<<<<<<< HEAD
             client = get_bridge_client()
             try:
                 positions = await client.get_positions()
@@ -97,6 +121,17 @@ async def _fill_monitor_loop():
                     pid = str(p.get('id', ''))
                     if pid in _fill_events and pid not in _fill_results:
                         open_price = p.get('openPrice')
+=======
+            try:
+                client = get_execution_client()
+                positions = await client.get_positions()
+                if not positions:
+                    continue
+                for p in positions:
+                    pid = str(p.get('id') or p.get('ticket') or p.get('position') or '')
+                    if pid in _fill_events and pid not in _fill_results:
+                        open_price = p.get('openPrice') or p.get('price') or p.get('open_price')
+>>>>>>> origin/main
                         if open_price is not None:
                             _fill_results[pid] = {
                                 'fill_price': float(open_price),
@@ -104,7 +139,11 @@ async def _fill_monitor_loop():
                                 'trade_id': pid,
                             }
                             _fill_events[pid].set()
+<<<<<<< HEAD
             except (BridgeHTTPError, BridgeConnectionError) as e:
+=======
+            except Exception as e:
+>>>>>>> origin/main
                 log_exception('_fill_monitor_loop', e)
     except asyncio.CancelledError:
         pass
@@ -126,7 +165,10 @@ async def _execute_smart_order(symbol: str, is_buy: bool, lot: float,
                                 level_price: float, sl: float, tp: float,
                                 t1_signal_ts: float,
                                 max_slippage_points: int) -> dict:
+<<<<<<< HEAD
     client = get_bridge_client()
+=======
+>>>>>>> origin/main
     broker_symbol = _resolve_broker_symbol(symbol)
     trade_id = None; fill_price = None; fill_source = None
     method_used = None; error = None; ioc_fail_reason = None
@@ -139,7 +181,11 @@ async def _execute_smart_order(symbol: str, is_buy: bool, lot: float,
         spread = q['ask'] - q['bid']
 
     if spread and spread > 0:
+<<<<<<< HEAD
         smart_limit_price = (level_price - spread / 2) if is_buy else (level_price + spread / 2)
+=======
+        smart_limit_price = level_price - spread / 2 if is_buy else level_price + spread / 2
+>>>>>>> origin/main
         if is_buy and smart_limit_price > level_price:
             smart_limit_price = level_price
         if not is_buy and smart_limit_price < level_price:
@@ -167,6 +213,7 @@ async def _execute_smart_order(symbol: str, is_buy: bool, lot: float,
 
     margin = bot_state['symbol_state'][symbol]['gann_touch_margin_pts'] * SYMBOL_INFO[symbol]['pip_value']
 
+<<<<<<< HEAD
     expiration_dt = (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()
 
     t_start = time.monotonic()
@@ -177,11 +224,33 @@ async def _execute_smart_order(symbol: str, is_buy: bool, lot: float,
             stop_loss=sl, take_profit=tp,
             order_type='limit', expiration=expiration_dt,
             comment='limit_buy_gann' if is_buy else 'limit_sell_gann',
+=======
+    limit_opts = {
+        'slippage': max_slippage_points,
+        'comment': 'limit_buy_gann' if is_buy else 'limit_sell_gann',
+        'expirationType': 'ORDER_TIME_SPECIFIED',
+        'expiration': datetime.utcnow() + timedelta(seconds=30),
+    }
+
+    t_start = time.monotonic()
+    try:
+        client = get_execution_client()
+        res = await client.send_limit_order(
+            broker_symbol, is_buy, lot, limit_price, sl=sl, tp=tp,
+            deviation=max_slippage_points, comment=limit_opts['comment'],
+            expiration=limit_opts.get('expiration'),
+>>>>>>> origin/main
         )
         t_ack = time.monotonic()
         latency_ms = round((t_ack - t_start) * 1000)
 
+<<<<<<< HEAD
         trade_id_candidate = str(res.get('orderId', ''))
+=======
+        # DWX result carries ticket/positionId; fall back to echo if absent
+        trade_id_candidate = str(
+            res.get('ticket') or res.get('positionId') or res.get('orderId') or '')
+>>>>>>> origin/main
 
         await _start_fill_monitor()
         fill_event = asyncio.Event()
@@ -213,10 +282,17 @@ async def _execute_smart_order(symbol: str, is_buy: bool, lot: float,
         # Cancel pending limit before Phase 2
         cancel_ok = False
         try:
+<<<<<<< HEAD
             await client.delete_pending_order(int(trade_id_candidate))
             cancel_ok = True
         except Exception as cancel_e:
             log_exception(f'_execute_smart_order delete pending [{symbol}/{trade_id_candidate}]', cancel_e)
+=======
+            await client.cancel_pending_order(broker_symbol, trade_id_candidate)
+            cancel_ok = True
+        except Exception as cancel_e:
+            log_exception(f'_execute_smart_order cancel_pending [{symbol}/{trade_id_candidate}]', cancel_e)
+>>>>>>> origin/main
             from telegram_ui import send_tg_msg
             await send_tg_msg(
                 f"🚨 <b>خطر: فشل إلغاء أمر Limit معلق!</b>\n"
@@ -255,6 +331,7 @@ async def _execute_smart_order(symbol: str, is_buy: bool, lot: float,
         if avg_slip_pips > 2.0:
             adaptive_slip_pts = int(max_slippage_points * 1.5)
 
+<<<<<<< HEAD
     t_start = time.monotonic()
     try:
         action = 'BUY' if is_buy else 'SELL'
@@ -263,11 +340,31 @@ async def _execute_smart_order(symbol: str, is_buy: bool, lot: float,
             stop_loss=sl, take_profit=tp,
             slippage=adaptive_slip_pts, filling_mode='FOK',
             comment='market_buy_fbk' if is_buy else 'market_sell_fbk',
+=======
+    market_opts = {
+        'slippage': adaptive_slip_pts,
+        'fillingModes': ['ORDER_FILLING_FOK'],
+        'comment': 'market_buy_fbk' if is_buy else 'market_sell_fbk',
+    }
+
+    t_start = time.monotonic()
+    try:
+        client = get_execution_client()
+        res = await client.send_market_order(
+            broker_symbol, is_buy, lot, sl=sl, tp=tp,
+            deviation=adaptive_slip_pts, comment=market_opts['comment'],
+            type_filling=1,
+>>>>>>> origin/main
         )
         t_ack = time.monotonic()
         latency_ms = round((t_ack - t_start) * 1000)
 
+<<<<<<< HEAD
         trade_id = str(res.get('positionId', res.get('orderId', '')))
+=======
+        trade_id = str(
+            res.get('ticket') or res.get('positionId') or res.get('orderId') or '')
+>>>>>>> origin/main
 
         await _start_fill_monitor()
         fill_event = asyncio.Event()
@@ -389,6 +486,10 @@ async def _gann_open_trade(symbol: str, is_buy: bool, level: dict, candles: list
                     if sym_state['gann_tpsl_mode'] == 'atr' else f"SL:{sl_pts}p TP:{tp_pts}p")
         be_lbl = " | 🛡️ BE Active" if sym_state['break_even_enabled'] else ""
 
+<<<<<<< HEAD
+=======
+        is_real = sym_state.get('auto_trade', False)
+>>>>>>> origin/main
         trade_id = f"sim_{int(datetime.now().timestamp())}_{tf}"
         real_msg = ""
         execution_failed = False
@@ -397,6 +498,7 @@ async def _gann_open_trade(symbol: str, is_buy: bool, level: dict, candles: list
         exec_result = None
 
         if is_real:
+<<<<<<< HEAD
             client = get_bridge_client()
             try:
                 await client.health()
@@ -406,6 +508,15 @@ async def _gann_open_trade(symbol: str, is_buy: bool, level: dict, candles: list
                 execution_failed = True
 
             if not execution_failed:
+=======
+            try:
+                get_execution_client()
+            except RuntimeError:
+                real_msg = "\n⚠️ لا يوجد اتصال MT5 صالح (DWXConnect) — لم يتم فتح أي صفقة."
+                is_real = False
+                execution_failed = True
+            else:
+>>>>>>> origin/main
                 max_slippage_points = int(bot_state.get('prot_max_slippage_points', 5))
                 exec_result = await _execute_smart_order(
                     symbol, is_buy, lot, level['price'], sl, tp, t1_signal_ts, max_slippage_points)
@@ -426,7 +537,12 @@ async def _gann_open_trade(symbol: str, is_buy: bool, level: dict, candles: list
                         f"\n🚀 <b>تم فتح الصفقة حقيقياً على حسابك!</b>"
                         + (f"\n⚠️ طريقة التنفيذ: {method_label}" if exec_result['method_used'] != 'limit' else '')
                         + f"\n⏱ وقت التنفيذ: {exec_result['latency_ms']}ms"
+<<<<<<< HEAD
                         + f"\n📡 تغذية: bridge tick poll | عمر السعر: {fresh_feed_age_ms if fresh_feed_age_ms is not None else 'n/a'}ms"
+=======
+                        + f"\n📡 تغذية: {'WS (DWXConnect live)' if fresh_feed_source == 'ws' else 'OANDA REST (fallback)'}"
+                        + f" | عمر السعر: {fresh_feed_age_ms if fresh_feed_age_ms is not None else 'n/a'}ms"
+>>>>>>> origin/main
                         + slippage_str
                     )
                     async with _fail_counter_lock:
@@ -603,6 +719,7 @@ async def _gann_tick_fire_check(symbol: str, live_px: float, feed_age_ms: float)
 
 # ── Trade Closure ──
 async def _close_metaapi_trade(symbol: str, tid: str, sym_state: dict) -> bool:
+<<<<<<< HEAD
     client = get_bridge_client()
     try:
         await client.health()
@@ -619,6 +736,21 @@ async def _close_metaapi_trade(symbol: str, tid: str, sym_state: dict) -> bool:
         for _ in range(25):
             positions = await client.get_positions()
             if not any(str(p.get('id')) == str(tid) for p in positions):
+=======
+    try:
+        client = get_execution_client()
+    except RuntimeError:
+        from telegram_ui import send_tg_msg
+        await send_tg_msg(f"🛑 <b>تعذّر إغلاق صفقة {symbol} ({tid}):</b> لا يوجد اتصال MT5 (DWXConnect).")
+        return False
+    try:
+        broker_symbol = _resolve_broker_symbol(symbol)
+        await client.close_position(broker_symbol, tid)
+        for _ in range(25):
+            positions = await client.get_positions()
+            if not any(str(p.get('id') or p.get('ticket') or p.get('position') or '') == str(tid)
+                       for p in positions):
+>>>>>>> origin/main
                 from telegram_ui import send_tg_msg
                 await send_tg_msg(f"✅ <b>تم إغلاق صفقة {symbol} (حقيقية) بنجاح لحماية الحساب!</b>")
                 if tid in sym_state['gann_open_trades']:
@@ -651,6 +783,7 @@ async def _close_metaapi_trades_batch(closures: list) -> None:
 
     if not closures:
         return
+<<<<<<< HEAD
 
     client = get_bridge_client()
     try:
@@ -659,17 +792,31 @@ async def _close_metaapi_trades_batch(closures: list) -> None:
         from telegram_ui import send_tg_msg
         detail = "\n\n".join(f"{symbol}: {_trade_detail_line(tr)}" for symbol, _, _, tr in closures)
         await send_tg_msg(f"🛑 <b>تعذّر إغلاق {len(closures)} صفقة:</b> لا يوجد اتصال mt5-bridge.\n\n{detail}")
+=======
+    try:
+        client = get_execution_client()
+    except RuntimeError:
+        from telegram_ui import send_tg_msg
+        detail = "\n\n".join(f"{symbol}: {_trade_detail_line(tr)}" for symbol, _, _, tr in closures)
+        await send_tg_msg(f"🛑 <b>تعذّر إغلاق {len(closures)} صفقة:</b> لا يوجد اتصال MT5 (DWXConnect).\n\n{detail}")
+>>>>>>> origin/main
         return
 
     pending = {}
     close_errors = []
     for symbol, tid, sym_state, tr in closures:
         try:
+<<<<<<< HEAD
             result = await client.close_position(tid)
             if result.get('success'):
                 pending[str(tid)] = (symbol, sym_state, tr)
             else:
                 close_errors.append(f"{symbol} ({tid}): {result.get('error', 'unknown')}")
+=======
+            broker_symbol = _resolve_broker_symbol(symbol)
+            await client.close_position(broker_symbol, tid)
+            pending[str(tid)] = (symbol, sym_state, tr)
+>>>>>>> origin/main
         except Exception as e:
             log_exception(f"_close_metaapi_trades_batch close_position [{symbol}/{tid}]", e)
             close_errors.append(f"{symbol} ({tid}): {e}")
@@ -685,12 +832,21 @@ async def _close_metaapi_trades_batch(closures: list) -> None:
             break
         try:
             positions = await client.get_positions()
+<<<<<<< HEAD
+=======
+            if not isinstance(positions, list):
+                raise TypeError(f"get_positions() returned {type(positions).__name__}, expected list")
+>>>>>>> origin/main
         except Exception as e:
             log_exception("_close_metaapi_trades_batch get_positions", e)
             await asyncio.sleep(1.0)
             continue
 
+<<<<<<< HEAD
         still_open_ids = {str(p.get('id')) for p in positions}
+=======
+        still_open_ids = {str(p.get('id') or p.get('ticket') or p.get('position') or '') for p in positions}
+>>>>>>> origin/main
         for tid in list(pending.keys()):
             if tid not in still_open_ids:
                 symbol, sym_state, tr = pending.pop(tid)

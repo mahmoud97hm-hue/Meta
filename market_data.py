@@ -1,4 +1,5 @@
 """
+<<<<<<< HEAD
 market_data.py — OANDA REST data fetching, mt5-bridge tick polling,
 live-quote cache, and connection management.
 
@@ -8,6 +9,22 @@ Owns:
   - live_quotes cache, _gann_cache, tick semaphore
   - Bridge watchdog (_force_full_reconnect)
   - Broker symbol resolution
+=======
+market_data.py — Self-hosted MT5 Socket.IO bridge (DWXConnect), OANDA REST
+candle fetcher, live-quote cache, and connection management.
+
+Owns:
+  - OANDA candle fetcher (fetch_candles, fetch_master_price)  [unchanged]
+  - MT5Bridge lifecycle (DWXConnect socket.io connection)
+  - live_quotes cache, _gann_cache, tick semaphore
+  - Socket.IO tick router -> _GannTickRouter (zero-latency, no polling)
+  - Live-Twin bridge (_live_twin_queue.put_nowait)
+  - Stale-tick watchdog (_force_full_reconnect)
+  - Broker symbol resolution
+
+This module is a drop-in replacement for the old MetaApi-based market_data.py.
+All public names used elsewhere in the bot are preserved.
+>>>>>>> origin/main
 """
 
 import asyncio
@@ -18,18 +35,30 @@ import aiohttp
 import numpy as np
 import pandas as pd
 
+<<<<<<< HEAD
 from mt5_bridge_client import (
     get_bridge_client, configure_bridge_client, BridgeHTTPError, BridgeConnectionError,
 )
 from state import (
     bot_state, MT5_BRIDGE_URL, MT5_ACCOUNT_ID, OANDA_TOKEN, OANDA_BASE_URL,
+=======
+from state import (
+    bot_state, METAAPI_TOKEN, ACCOUNT_ID, OANDA_TOKEN, OANDA_BASE_URL,
+>>>>>>> origin/main
     SYMBOL_INFO, CONN_RUNNING, CONN_READ_ONLY, CONN_HALTED,
     _state_lock, get_http, log_exception, c_log, _safe_task,
     set_connection_state,
 )
+<<<<<<< HEAD
 
 # ---------------------------------------------------------------------------
 # OANDA FETCHER
+=======
+from mt5_bridge import MT5Bridge, bridge as _shared_bridge
+
+# ---------------------------------------------------------------------------
+# OANDA FETCHER  (unchanged — kept for historical candle backfills)
+>>>>>>> origin/main
 # ---------------------------------------------------------------------------
 _OANDA_GRAN = {'1m':'M1','2m':'M2','3m':'M3','4m':'M4','5m':'M5','6m':'M6',
                '10m':'M10','15m':'M15','20m':'M20','30m':'M30','1h':'H1','2h':'H2'}
@@ -80,13 +109,21 @@ async def fetch_candles(symbol: str, granularity_str: str, count: int = 5000,
     while remaining > 0:
         chunk = min(remaining, 5000)
         params = {'granularity': gran_str, 'count': chunk,
+<<<<<<< HEAD
                    'to': current_end.strftime('%Y-%m-%dT%H:%M:%S.000000000Z'), 'price': 'M'}
+=======
+                  'to': current_end.strftime('%Y-%m-%dT%H:%M:%S.000000000Z'), 'price': 'M'}
+>>>>>>> origin/main
         candles = []
         async with _get_oanda_sem():
             for attempt in range(6):
                 try:
                     async with get_http().get(url, headers=headers, params=params,
+<<<<<<< HEAD
                                                timeout=aiohttp.ClientTimeout(total=20)) as resp:
+=======
+                                              timeout=aiohttp.ClientTimeout(total=20)) as resp:
+>>>>>>> origin/main
                         if resp.status != 200:
                             if attempt == 5:
                                 c_log(f"fetch_candles [{symbol} {granularity_str}]: giving up after 6 attempts "
@@ -130,7 +167,11 @@ async def fetch_master_price(symbol: str) -> float | None:
 
 
 # ---------------------------------------------------------------------------
+<<<<<<< HEAD
 # LIVE QUOTES & TICK POLLING
+=======
+# LIVE QUOTES & SOCKET.IO TICK ROUTER
+>>>>>>> origin/main
 # ---------------------------------------------------------------------------
 live_quotes: dict[str, dict] = {}
 _broker_to_data_symbol: dict[str, str] = {}
@@ -140,6 +181,7 @@ _QUOTE_STALE_SECONDS = 5.0
 _last_any_tick_ts = time.monotonic()
 _WS_WATCHDOG_STALE_SECONDS = 60.0
 
+<<<<<<< HEAD
 # Live-Twin tick bridge
 _live_twin_queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
 
@@ -150,6 +192,53 @@ _TICK_POLL_INTERVAL = 0.15  # 150ms per symbol
 # Bridge connection state
 _bridge_initialized = False
 _bridge_reconnect_task: asyncio.Task | None = None
+=======
+# ── Live-Twin tick bridge (preserved) ──
+_live_twin_queue: asyncio.Queue = asyncio.Queue(maxsize=2000)
+
+# shared bridge singleton (imported from mt5_bridge)
+bridge: MT5Bridge | None = None
+
+# ── Strict Singleton: subscription set ──
+_active_subscriptions: set[str] = set()
+
+
+class _GannTickRouter:
+    """
+    Receives ticks from MT5Bridge.on_tick and routes them with zero latency:
+      1. updates live_quotes cache
+      2. fires the Gann level-touch detector
+      3. feeds the Live-Twin engine via put_nowait (non-blocking)
+    Registered once on the bridge. No polling, no threads.
+    """
+
+    def __init__(self):
+        self._last_any_tick_ts = time.monotonic()
+
+    def __call__(self, broker_sym: str, bid: float, ask: float, ts: float):
+        global _last_any_tick_ts
+        _last_any_tick_ts = ts
+        data_sym = _broker_to_data_symbol.get(broker_sym)
+        if not data_sym:
+            # auto-register unknown symbols so we never drop a tick
+            data_sym = broker_sym.replace('_', '')
+            _broker_to_data_symbol[broker_sym] = data_sym
+        mid = (bid + ask) / 2.0
+        live_quotes[data_sym] = {'bid': bid, 'ask': ask, 'mid': mid, 'ts': ts}
+
+        # tick-driven Gann level detection (fire-and-forget, non-blocking)
+        from execution import _gann_tick_fire_check
+        _safe_task(_gann_tick_fire_check(data_sym, mid, 0.0), 'tick_fire_check')
+
+        # Live-Twin paper-trading bridge (write-discard, never blocks)
+        if bot_state.get('is_live_twin_running', False):
+            try:
+                _live_twin_queue.put_nowait({
+                    'symbol': data_sym, 'bid': bid, 'ask': ask, 'mid': mid, 'ts': ts
+                })
+            except asyncio.QueueFull:
+                pass
+>>>>>>> origin/main
 
 
 def _lq_is_stale(symbol: str) -> bool:
@@ -172,6 +261,7 @@ def _resolve_broker_symbol(symbol: str) -> str:
 
 
 async def _lq_subscribe_symbol(symbol: str) -> None:
+<<<<<<< HEAD
     """No-op for bridge — all symbols are polled automatically."""
     broker_sym = _resolve_broker_symbol(symbol)
     _broker_to_data_symbol[broker_sym] = symbol
@@ -309,3 +399,104 @@ async def init_bridge() -> None:
         _tick_poller_task = asyncio.create_task(_tick_poller_loop())
     if _bridge_reconnect_task is None or _bridge_reconnect_task.done():
         _bridge_reconnect_task = asyncio.create_task(_bridge_watchdog())
+=======
+    global _active_subscriptions, bridge
+    if bridge is None or not bridge.sio.connected:
+        return
+    broker_sym = _resolve_broker_symbol(symbol)
+    _broker_to_data_symbol[broker_sym] = symbol
+    if broker_sym in _active_subscriptions:
+        return  # guard against duplicate subscribe calls
+    try:
+        await bridge.subscribe([broker_sym])
+        _active_subscriptions.add(broker_sym)
+    except Exception as e:
+        log_exception(f"_lq_subscribe_symbol [{symbol} -> {broker_sym}]", e)
+
+
+async def _force_full_reconnect(reason: str) -> None:
+    global bridge, _last_any_tick_ts, _active_subscriptions
+    c_log(f"WS WATCHDOG: forcing full reconnect -- {reason}")
+    await set_connection_state(CONN_READ_ONLY, f"WS watchdog: {reason}")
+    if bridge is None:
+        c_log("WS WATCHDOG: bridge is None — cannot reconnect")
+        return
+    try:
+        _active_subscriptions.clear()  # re-subscribe on reconnect
+        if bridge.sio.connected:
+            try:
+                await asyncio.wait_for(bridge.sio.disconnect(), timeout=15)
+            except Exception as e:
+                log_exception('_force_full_reconnect: disconnect', e)
+        # socketio reconnection (reconnection=True) will re-fire connect ->
+        # _resubscribe for all active symbols. Give it a bounded retry.
+        connected = False
+        for _ in range(5):
+            try:
+                await asyncio.wait_for(bridge.connect(), timeout=30)
+                connected = True
+                break
+            except Exception as e:
+                log_exception('_force_full_reconnect: reconnect attempt', e)
+                await asyncio.sleep(5)
+        if not connected:
+            from telegram_ui import send_tg_msg
+            await send_tg_msg(f"🛑 <b>Watchdog: فشلت محاولة إعادة الاتصال التلقائي</b>\nالسبب: {reason}")
+            return
+        _last_any_tick_ts = time.monotonic()
+        c_log("WS WATCHDOG: reconnect successful, ticks should resume.")
+        await set_connection_state(CONN_RUNNING, "WS watchdog: forced reconnect succeeded.")
+        from telegram_ui import send_tg_msg
+        await send_tg_msg(f"🔁 <b>Watchdog: أعيد الاتصال تلقائياً بـ DWXConnect</b>\nالسبب: {reason}")
+    except Exception as e:
+        log_exception('_force_full_reconnect', e)
+        from telegram_ui import send_tg_msg
+        await send_tg_msg(f"🛑 <b>Watchdog: خطأ في إعادة الاتصال</b>\nالسبب الأصلي: {reason}\nالخطأ: {e}")
+
+
+# ---------------------------------------------------------------------------
+# BRIDGE CONNECTION LIFECYCLE
+# ---------------------------------------------------------------------------
+async def _bootstrap_bridge_connection() -> bool:
+    global bridge, _last_any_tick_ts
+    try:
+        url = bot_state.get('bridge_url') or MT5Bridge().url
+        api_key = bot_state.get('bridge_api_key', '')
+        bridge = MT5Bridge(url=url, api_key=api_key)
+        router = _GannTickRouter()
+        bridge.on_tick(router)
+        await bridge.connect()
+        await bridge.wait_ready()
+        # subscribe all active symbols
+        for sym, on in bot_state.get('active_symbols', {}).items():
+            if on:
+                await _lq_subscribe_symbol(sym)
+        _last_any_tick_ts = time.monotonic()
+        c_log("DWXConnect bridge established (live quotes subscribed).")
+        await set_connection_state(CONN_RUNNING, "DWXConnect bridge connected and synchronized.")
+        return True
+    except Exception as e:
+        log_exception("_bootstrap_bridge_connection", e)
+        await set_connection_state(CONN_READ_ONLY, f"DWXConnect bridge bootstrap failed: {e}")
+        return False
+
+
+async def init_bridge():
+    """Modern entrypoint: connect to the self-hosted MT5 bridge."""
+    from state import load_bot_persistence
+    await load_bot_persistence()
+    if bot_state.get('_persistence_load_failed'):
+        await set_connection_state(
+            CONN_READ_ONLY,
+            "Startup persistence file was present but unreadable. Starting READ_ONLY until a human "
+            "confirms the true broker state and clears this manually."
+        )
+    await _bootstrap_bridge_connection()
+
+
+# Backwards-compatible alias so main.py's `from market_data import init_metaapi`
+# keeps working during the transition.
+async def init_metaapi():
+    c_log("[market_data] init_metaapi() is deprecated — routing to init_bridge() (DWXConnect).")
+    await init_bridge()
+>>>>>>> origin/main

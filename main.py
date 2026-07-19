@@ -3,7 +3,11 @@ main.py — Entry point and task orchestration.
 
 v9.5 — Refactored from monolithic Script.py into modular architecture:
   state.py         — global state, config, persistence, connection FSM
+<<<<<<< HEAD
   market_data.py   — OANDA REST, mt5-bridge tick polling, live quotes
+=======
+  market_data.py   — OANDA REST, MetaApi WebSocket, live quotes
+>>>>>>> origin/main
   strategy.py      — Gann levels, trend filters, ATR, TP/SL
   execution.py     — order execution, trade management, fill monitor
   backtest.py      — backtest & Live-Twin engines
@@ -22,7 +26,11 @@ from state import (
     bot_state, get_http, c_log, log_exception, _safe_task,
     CONN_RUNNING, CONN_READ_ONLY, CONN_HALTED,
 )
+<<<<<<< HEAD
 from market_data import init_bridge
+=======
+from market_data import init_metaapi
+>>>>>>> origin/main
 from gann_monitor import (
     gann_monitor_scanner, gann_cycle_manager, global_ledger_reconciliation,
 )
@@ -88,7 +96,11 @@ async def handle_ping(request: web.Request) -> web.Response:
 # ── Main Entry Point ──
 async def main() -> None:
     get_http()
+<<<<<<< HEAD
     await init_bridge()
+=======
+    await init_metaapi()
+>>>>>>> origin/main
 
     app = web.Application()
     app.router.add_get('/', handle_ping)

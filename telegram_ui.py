@@ -123,7 +123,11 @@ async def send_tg_document(file_path: str, caption: str) -> None:
 def get_main_keyboard() -> dict:
     return {'inline_keyboard': [
         [{'text': '📊 لوحة التحكم المباشرة', 'callback_data': 'menu_dashboard'}],
+<<<<<<< HEAD
         [{'text': '🔌 فحص حالة حساب MT5 Bridge', 'callback_data': 'check_metaapi_status'}],
+=======
+        [{'text': '🔌 فحص حالة جسر MT5 (DWXConnect)', 'callback_data': 'check_bridge_status'}],
+>>>>>>> origin/main
         [{'text': '🩺 تشخيص: ليه مفيش صفقات؟', 'callback_data': 'run_diag'}],
         [{'text': '📊 تصدير سجل تشخيص تفصيلي (Excel)', 'callback_data': 'export_diag_excel'}],
         [{'text': '📒 تصدير سجل الصفقات الحية (Excel)', 'callback_data': 'export_live_trades_excel'}],
@@ -362,6 +366,7 @@ def get_live_twin_friction_keyboard() -> dict:
     ]}
 
 
+<<<<<<< HEAD
 # ── Bridge Status Command ──
 async def check_metaapi_status_command(chat_id: int):
     from mt5_bridge_client import get_bridge_client
@@ -384,6 +389,44 @@ async def check_metaapi_status_command(chat_id: int):
         await send_tg_msg(msg)
     except Exception as e:
         await send_tg_msg(f"❌ خطأ في الاتصال بـ MT5 Bridge:\n{html_mod.escape(str(e))}")
+=======
+# ── Bridge (DWXConnect) Status Command ──
+async def check_bridge_status_command(chat_id: int):
+    from mt5_bridge import bridge as _bridge
+    from market_data import live_quotes, _last_any_tick_ts
+    await send_tg_msg("⏳ جاري فحص حالة جسر MT5 (DWXConnect)...")
+    try:
+        if _bridge is None or not _bridge.sio.connected:
+            await send_tg_msg("⚠️ <b>جسر MT5 غير متصل حالياً.</b> تحقق من حاوية mt5-bridge على Railway.")
+            return
+        client = None
+        try:
+            from mt5_bridge import get_execution_client
+            client = get_execution_client()
+        except RuntimeError:
+            client = None
+        # pull a live snapshot of open positions via the bridge
+        positions = []
+        if client is not None:
+            try:
+                positions = await client.get_positions()
+            except Exception:
+                positions = []
+        tick_age = time.monotonic() - _last_any_tick_ts
+        msg = (
+            f"<b>حالة جسر MT5 (DWXConnect)</b>\n"
+            f"الاتصال: ✅ متصل\n"
+            f"عمر آخر تيك: {tick_age:.1f}s\n"
+            f"الأدوات الحية: {len(live_quotes)}\n"
+            f"الصفقات المفتوحة: {len(positions)}\n"
+        )
+        for p in positions[:10]:
+            sym = p.get('symbol') or p.get('id') or '?'
+            msg += f"🔸 {sym}\n"
+        await send_tg_msg(msg)
+    except Exception as e:
+        await send_tg_msg(f"❌ خطأ في فحص جسر MT5:\n{html_mod.escape(str(e))}")
+>>>>>>> origin/main
 
 
 # ── Callback Dispatcher ──
@@ -399,8 +442,13 @@ async def _handle_callback(d: str, chat_id: int, msg_id: int) -> None:
     from execution import _consecutive_real_order_failures as _exec_failures
     from gann_monitor import _recon_consecutive_mismatches
 
+<<<<<<< HEAD
     if d == 'check_metaapi_status':
         _safe_task(check_metaapi_status_command(chat_id), 'check_metaapi_status'); return
+=======
+    if d == 'check_bridge_status':
+        _safe_task(check_bridge_status_command(chat_id), 'check_bridge_status'); return
+>>>>>>> origin/main
     if d == 'run_diag':
         async def _run_diag_task():
             try:

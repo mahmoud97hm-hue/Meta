@@ -1,4 +1,8 @@
 aiohttp
 pandas
 numpy
+<<<<<<< HEAD
+=======
+python-socketio
+>>>>>>> origin/main
 openpyxl

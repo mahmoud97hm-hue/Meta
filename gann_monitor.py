@@ -20,7 +20,10 @@ import openpyxl
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
+<<<<<<< HEAD
 from mt5_bridge_client import get_bridge_client, BridgeHTTPError, BridgeConnectionError
+=======
+>>>>>>> origin/main
 from state import (
     bot_state, SYMBOL_INFO, _TFS, DAM_OFF,
     CONN_RUNNING, CONN_READ_ONLY, CONN_HALTED,
@@ -30,11 +33,43 @@ from state import (
     _record_closed_trade_history, _trade_history_lock,
 )
 from market_data import (
+<<<<<<< HEAD
     live_quotes, _lq_price_with_fallback, _force_full_reconnect,
     _gann_cache, fetch_candles, fetch_master_price,
     _QUOTE_STALE_SECONDS, _WS_WATCHDOG_STALE_SECONDS, _last_any_tick_ts,
     _bridge_initialized, _is_market_hours,
 )
+=======
+    live_quotes,
+    _lq_price_with_fallback, _force_full_reconnect,
+    _gann_cache, fetch_candles, fetch_master_price,
+    _QUOTE_STALE_SECONDS, _WS_WATCHDOG_STALE_SECONDS, _last_any_tick_ts,
+)
+from mt5_bridge import get_execution_client, MT5ExecutionClient
+
+
+# ── Bridge accessors (replace the old MetaApi _metaapi_conn singleton) ──
+def _bridge_client() -> "MT5ExecutionClient | None":
+    """Return the live DWXConnect execution client, or None if the bridge is
+    not connected. Replaces the legacy `_metaapi_conn is not None` checks."""
+    try:
+        return get_execution_client()
+    except RuntimeError:
+        return None
+
+
+async def _bridge_positions() -> list:
+    """Fetch open positions from the bridge, or [] if unavailable. Replaces
+    `_metaapi_conn.terminal_state.positions`."""
+    client = _bridge_client()
+    if client is None:
+        return []
+    try:
+        return await client.get_positions()
+    except Exception as e:
+        log_exception("gann_monitor _bridge_positions", e)
+        return []
+>>>>>>> origin/main
 from strategy import (
     gann_calc_levels, gann_active_levels, _gann_atr, _gann_fetch_last_closed_anchor,
     _gann_tf_tp, _gann_tf_sl, _anchor_label, _anchor_hours,
@@ -43,6 +78,10 @@ from strategy import (
 )
 from backtest import GANN_DYNAMIC_RECALC_MINUTES, _utc_to_dam
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/main
 # ── Scanner error alert rate limit ──
 _last_scanner_error_alert_ts = 0.0
 
@@ -59,8 +98,16 @@ async def gann_monitor_scanner() -> None:
     c_log('Gann live scanner started.')
     while True:
         try:
+<<<<<<< HEAD
             active_syms_now = [s for s, on in bot_state['active_symbols'].items() if on]
             if (_bridge_initialized and active_syms_now and _is_market_hours()
+=======
+            # Stale tick watchdog: if no tick for >60s, trigger full reconnect.
+            # Connection management is in market_data.py (init_metaapi / _bootstrap).
+            # Scanner reads from the shared live_quotes cache ONLY.
+            active_syms_now = [s for s, on in bot_state['active_symbols'].items() if on]
+            if (_bridge_client() is not None and active_syms_now and _is_market_hours_now()
+>>>>>>> origin/main
                     and (time.monotonic() - _last_any_tick_ts) > _WS_WATCHDOG_STALE_SECONDS):
                 await _force_full_reconnect(
                     f"لا تيك واحد وصل منذ {time.monotonic() - _last_any_tick_ts:.0f}s "
@@ -83,7 +130,11 @@ async def gann_monitor_scanner() -> None:
                 for symbol in stale_active_symbols:
                     sym_state = bot_state['symbol_state'][symbol]
                     for tid, tr in list(sym_state['gann_open_trades'].items()):
+<<<<<<< HEAD
                         if tr.get('is_real') and _bridge_initialized:
+=======
+                        if tr.get('is_real') and _bridge_client() is not None:
+>>>>>>> origin/main
                             stale_real_closures.append((symbol, tid, sym_state, tr))
                 if stale_real_closures:
                     from execution import _close_metaapi_trades_batch
@@ -112,6 +163,7 @@ async def gann_monitor_scanner() -> None:
 
                 if sym_state['gann_open_trades']:
                     actual_positions = {}; sync_failed = False
+<<<<<<< HEAD
                     if bot_state.get('prot_true_sync', True) and _bridge_initialized:
                         client = get_bridge_client()
                         try:
@@ -126,6 +178,21 @@ async def gann_monitor_scanner() -> None:
                             sync_failed = True
                             await set_connection_state(CONN_READ_ONLY,
                                 f"Bridge get_positions() sync failed for {symbol}: {e}.")
+=======
+                    if bot_state.get('prot_true_sync', True) and _bridge_client() is not None:
+                        try:
+                            positions = await _bridge_positions()
+                            for p in positions:
+                                actual_positions[str(p.get('id') or p.get('ticket') or p.get('position') or '')] = p
+                            if (bot_state.get('connection_state') == CONN_READ_ONLY
+                                    and 'sync' in bot_state.get('connection_state_reason', '').lower()):
+                                await set_connection_state(CONN_RUNNING, "MT5 get_positions() succeeded again.")
+                        except Exception as e:
+                            log_exception(f"MT5 get_positions [{symbol}]", e)
+                            sync_failed = True
+                            await set_connection_state(CONN_READ_ONLY,
+                                f"MT5 get_positions() sync failed for {symbol}: {e}.")
+>>>>>>> origin/main
                     if sync_failed:
                         continue
 
@@ -140,16 +207,21 @@ async def gann_monitor_scanner() -> None:
                     if not oanda_failed:
                         live_px = float(mc[-1]['close'])
                     else:
+<<<<<<< HEAD
                         c_log(f"Oanda failed for {symbol}. Using bridge currentPrice.")
                         # Try bridge for current price
                         q = live_quotes.get(symbol)
                         if q:
                             live_px = q.get('mid')
+=======
+                        c_log(f"Oanda failed for {symbol}. Decoupled Mode: using MT5 currentPrice.")
+>>>>>>> origin/main
 
                     closed_ids = []
                     history_deals_cache = None
                     missing_tids = [t for t, v in sym_state['gann_open_trades'].items()
                                     if v.get('is_real') and t not in actual_positions]
+<<<<<<< HEAD
                     if missing_tids and _bridge_initialized:
                         start_time = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
                         end_time = datetime.now(timezone.utc).isoformat()
@@ -167,6 +239,35 @@ async def gann_monitor_scanner() -> None:
                                          if d.get('entryType') in ('DEAL_ENTRY_OUT', 'DEAL_ENTRY_OUT_BY')}
                             if all(str(t) in found_now for t in missing_tids):
                                 break
+=======
+                    if missing_tids and _bridge_client() is not None:
+                        # The bridge client exposes live positions but not the
+                        # full deal history; rely on reconcile via positions.
+                        # We attempt a best-effort history fetch when available,
+                        # otherwise leave history_deals_cache empty (handled
+                        # gracefully below as an estimated close).
+                        history_deals_cache = []
+                        try:
+                            client = _bridge_client()
+                            if hasattr(client, 'get_history_deals'):
+                                start_time = datetime.now(timezone.utc) - timedelta(days=2)
+                                for attempt_i, delay in enumerate((0, 3, 5)):
+                                    if delay:
+                                        await asyncio.sleep(delay)
+                                    try:
+                                        history_deals_cache = await client.get_history_deals(
+                                            start_time, datetime.now(timezone.utc))
+                                    except Exception as e:
+                                        log_exception(f"get_history_deals [{symbol}] attempt {attempt_i+1}/3", e)
+                                        continue
+                                    found_now = {str(d.get('positionId')) for d in history_deals_cache
+                                                 if d.get('entryType') in ('DEAL_ENTRY_OUT', 'DEAL_ENTRY_OUT_BY')}
+                                    if all(str(t) in found_now for t in missing_tids):
+                                        break
+                        except Exception as e:
+                            log_exception(f"get_history_deals setup [{symbol}]", e)
+                            history_deals_cache = []
+>>>>>>> origin/main
 
                     for tid, tr in list(sym_state['gann_open_trades'].items()):
                         is_buy = tr.get('is_buy'); tp = tr.get('tp'); sl = tr.get('sl')
@@ -185,7 +286,11 @@ async def gann_monitor_scanner() -> None:
                         trade_pl = round(diff * sym_state['lot_size'] * cs, 2)
                         tr['last_known_pl'] = trade_pl
 
+<<<<<<< HEAD
                         if is_real and bot_state.get('prot_true_sync', True) and _bridge_initialized:
+=======
+                        if is_real and bot_state.get('prot_true_sync', True) and _bridge_client() is not None:
+>>>>>>> origin/main
                             if tid not in actual_positions:
                                 exact_pnl = trade_pl; found_deal = False
                                 if history_deals_cache is not None:
@@ -212,7 +317,11 @@ async def gann_monitor_scanner() -> None:
                                     close_reason='tp_sl_or_manual_broker_close', pnl_confirmed=found_deal)
                                 continue
                             else:
+<<<<<<< HEAD
                                 trade_pl = _safe_float(actual_positions[tid].get('profit'), trade_pl)
+=======
+                                trade_pl = _safe_float(actual_positions[tid].get('unrealizedProfit'), trade_pl)
+>>>>>>> origin/main
 
                         from strategy import core_eval_outcome, core_eval_break_even
                         outcome = core_eval_outcome(is_buy, active_px, tp, sl)
@@ -222,6 +331,7 @@ async def gann_monitor_scanner() -> None:
                                 SYMBOL_INFO[symbol]['pip_value'], be_pts, sym_state.get('gann_atr_period', 14),
                                 bot_state.get('prot_cost_be', True))
                             if net_be is not None:
+<<<<<<< HEAD
                                 if is_real and _bridge_initialized:
                                     client = get_bridge_client()
                                     try:
@@ -231,6 +341,17 @@ async def gann_monitor_scanner() -> None:
                                             await save_bot_persistence()
                                             from telegram_ui import send_tg_msg
                                             await send_tg_msg(f"🛡️ تم تفعيل Break-Even لـ {symbol}!")
+=======
+                                if is_real and _bridge_client() is not None:
+                                    try:
+                                        client = _bridge_client()
+                                        await client.modify_position_sl_tp(
+                                            symbol, tid, sl=net_be, tp=tr.get('tp') or 0.0)
+                                        tr['sl'] = net_be; tr['be_activated'] = True
+                                        await save_bot_persistence()
+                                        from telegram_ui import send_tg_msg
+                                        await send_tg_msg(f"🛡️ تم تفعيل Break-Even لـ {symbol}!")
+>>>>>>> origin/main
                                     except Exception as e:
                                         log_exception(f"BE modify_position [{symbol}/{tid}]", e)
                                         from telegram_ui import send_tg_msg
@@ -271,7 +392,11 @@ async def gann_monitor_scanner() -> None:
                 for symbol in active_symbols:
                     sym_state = bot_state['symbol_state'][symbol]
                     for tid, tr in list(sym_state['gann_open_trades'].items()):
+<<<<<<< HEAD
                         if tr.get('is_real') and _bridge_initialized:
+=======
+                        if tr.get('is_real') and _bridge_client() is not None:
+>>>>>>> origin/main
                             real_closures.append((symbol, tid, sym_state, tr))
                         else:
                             pl = tr.get('last_known_pl', 0.0)
@@ -438,12 +563,22 @@ async def global_ledger_reconciliation() -> None:
     while True:
         try:
             await asyncio.sleep(RECONCILIATION_INTERVAL_SECONDS)
+<<<<<<< HEAD
             if bot_state.get('connection_state', CONN_RUNNING) != CONN_RUNNING or not _bridge_initialized:
                 continue
             client = get_bridge_client()
             try:
                 broker_positions = await client.get_positions()
             except (BridgeHTTPError, BridgeConnectionError) as e:
+=======
+            if bot_state.get('connection_state', CONN_RUNNING) != CONN_RUNNING or _bridge_client() is None:
+                continue
+            try:
+                broker_positions = await _bridge_positions()
+                if not isinstance(broker_positions, list):
+                    raise TypeError(f"get_positions() returned {type(broker_positions).__name__}")
+            except Exception as e:
+>>>>>>> origin/main
                 log_exception('global_ledger_reconciliation get_positions', e)
                 continue
             broker_ids = {str(p['id']) for p in broker_positions if p.get('id')}
@@ -485,7 +620,10 @@ async def gann_run_diagnostics() -> str:
     lines.append(f"1️⃣ حالة الاتصال: {'✅ RUNNING' if conn_ok else f'🛑 {conn_state}'}")
     if not conn_ok:
         lines.append(f"   السبب: {bot_state.get('connection_state_reason', '-')}")
+<<<<<<< HEAD
     lines.append(f"   الجسر: {'✅ متصل' if _bridge_initialized else '🛑 غير متصل'}")
+=======
+>>>>>>> origin/main
     dam_blocked = _is_within_dam_restricted_window()
     dam_now = datetime.now(timezone.utc) + timedelta(hours=3)
     filter_on = bot_state.get('prot_dam_time_filter', True)
@@ -504,11 +642,19 @@ async def gann_run_diagnostics() -> str:
         q = live_quotes.get(symbol)
         ws_age = (time.monotonic() - q['ts']) if q else None
         if q is None:
+<<<<<<< HEAD
             lines.append("📡 تغذية الأسعار (Bridge Poll): 🛑 <b>لم تصل ولا تيك واحد</b>")
         elif ws_age > _QUOTE_STALE_SECONDS:
             lines.append(f"📡 تغذية الأسعار (Bridge Poll): 🛑 <b>متوقفة منذ {ws_age:.0f}s</b>")
         else:
             lines.append(f"📡 تغذية الأسعار (Bridge Poll): ✅ حية ({ws_age:.1f}s)")
+=======
+            lines.append("📡 تغذية MT5 (DWXConnect): 🛑 <b>لم تصل ولا تيك واحد</b>")
+        elif ws_age > _QUOTE_STALE_SECONDS:
+            lines.append(f"📡 تغذية MT5 (DWXConnect): 🛑 <b>متوقفة منذ {ws_age:.0f}s</b>")
+        else:
+            lines.append(f"📡 تغذية MT5 (DWXConnect): ✅ حية ({ws_age:.1f}s)")
+>>>>>>> origin/main
         cycle_active = sym_state.get('gann_cycle_active', False)
         n_levels = len(sym_state.get('gann_levels', []))
         lines.append(f"دورة جان نشطة: {'✅' if cycle_active else '🛑'}  |  عدد المستويات: {n_levels}")
