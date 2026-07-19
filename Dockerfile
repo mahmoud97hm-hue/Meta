@@ -17,6 +17,7 @@ ENV LANG=C.UTF-8 \
     WINEARCH=win64 \
     WINEPREFIX=/root/.wine-mt5-terminal1 \
     WINEDEBUG=-all \
+    WINEDLLOVERRIDES="api-ms-win-crt-runtime-l1-1-0=n,b;ucrtbase=n,b;vcruntime140=n,b;vcruntime140_1=n,b;msvcp140=n,b;concrt140=n,b" \
     MT5_TERMINAL_PATH=/root/.wine-mt5-terminal1/drive_c/MetaTrader5/terminal64.exe \
     MT5_WINE_PREFIX=/root/.wine-mt5-terminal1 \
     BRIDGE_HOST=0.0.0.0 \
@@ -24,7 +25,7 @@ ENV LANG=C.UTF-8 \
     REDIS_URL=redis://127.0.0.1:6379/0 \
     PYTHONHASHSEED=0 \
     XDG_RUNTIME_DIR=/tmp \
-    PATH="/usr/lib/wine:/opt/wine-stable/bin:/usr/bin:/usr/local/bin:${PATH}"
+    PATH="/usr/lib/wine:/opt/wine-staging/bin:/opt/wine-stable/bin:/usr/bin:/usr/local/bin:${PATH}"
 
 # ---- system deps: wine64 + redis + python3 (host) + tools ----
 # Note: the bridge itself runs under Wine's embedded Python, but we keep
@@ -33,17 +34,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         bash coreutils curl ca-certificates unzip xvfb \
         redis-server python3 python3-pip fontconfig fonts-dejavu-core \
         libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender1 libxi6 \
-        libxrandr2 libxxf86vm1 wine64 wget \
+        libxrandr2 libxxf86vm1 wget software-properties-common \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- locate Wine binaries on PATH before using them ----
-RUN echo "[build] locating Wine binaries..." \
-    && WINE_BIN=$(dirname $(find /usr/lib /opt/wine-stable -name 'wine64' -type f 2>/dev/null | head -1)) \
-    && echo "[build] wine bin dir: ${WINE_BIN}" \
-    && export PATH="${WINE_BIN}:/usr/lib/wine:/opt/wine-stable/bin:$PATH" \
-    && which wine64 wineboot wineserver \
-    && echo "[build] initializing 64-bit Wine prefix..." \
+# ---- install WineHQ staging (Wine 9.x) ----
+RUN wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key \
+    && wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/jammy/winehq-jammy.sources \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends wine-staging-amd64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---- initialize Wine prefix + set Windows 10 mode ----
+RUN echo "[build] initializing 64-bit Wine prefix..." \
     && wineboot --init 2>&1 || true \
+    && wineserver -w \
+    && echo "[build] setting Windows 10 mode..." \
+    && xvfb-run -a winecfg -v win10 \
     && wineserver -w \
     && wine64 --version
 
