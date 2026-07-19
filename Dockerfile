@@ -44,14 +44,14 @@ RUN dpkg --add-architecture i386 \
     && apt-get install -y --install-recommends winehq-stable \
     && rm -rf /var/lib/apt/lists/*
 
-# ---- initialize Wine prefix + set Windows 10 mode ----
+# ---- initialize Wine prefix + set Windows 10 mode via registry ----
 RUN echo "[build] initializing 64-bit Wine prefix..." \
-    && wineboot --init 2>&1 || true \
+    && wineboot --init \
     && wineserver -w \
-    && echo "[build] setting Windows 10 mode..." \
-    && xvfb-run -a winecfg -v win10 \
+    && echo "[build] setting Windows 10 mode via registry..." \
+    && wine reg add "HKEY_CURRENT_USER\Software\Wine" /v Version /t REG_SZ /d "win10" /f \
     && wineserver -w \
-    && wine64 --version
+    && wine --version
 
 # ---- Wine-embedded Python 3.10.11 + MetaTrader5 lib ----
 ENV WINEPYTHON=C:\\Python310
