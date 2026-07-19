@@ -69,7 +69,7 @@ RUN mkdir -p /opt/winpy /opt/whl \
     && unzip -q /opt/whl/pip-*.whl -d /root/.wine-mt5-terminal1/drive_c/Python310/Lib/site-packages/ \
     && unzip -q /opt/whl/setuptools-*.whl -d /root/.wine-mt5-terminal1/drive_c/Python310/Lib/site-packages/ \
     && unzip -q /opt/whl/wheel-*.whl -d /root/.wine-mt5-terminal1/drive_c/Python310/Lib/site-packages/ \
-    && WINEPREFIX=/root/.wine-mt5-terminal1 WINEARCH=win64 WINEDEBUG=-all wine64 \
+    && WINEPREFIX=/root/.wine-mt5-terminal1 WINEARCH=win64 WINEDEBUG=-all wine \
         C:\\Python310\\python.exe -m pip install --no-index --find-links=Z:\\opt\\whl \
         "MetaTrader5==5.0.45" "python-socketio==5.11.4" "aiohttp" "uvicorn" "fastapi" "redis" "colorama" \
     && rm -rf /opt/winpy /opt/whl
