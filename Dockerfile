@@ -91,7 +91,7 @@ RUN echo "[build] Starting Xvfb in background..." \
     && curl -L -o /root/vc_redist.x64.exe "https://aka.ms/vs/17/release/vc_redist.x64.exe" \
     && chmod +x /root/vc_redist.x64.exe \
     && echo "[build] Installing VC++ redistributable into Wine prefix..." \
-    && WINEPREFIX=/root/.wine-mt5-terminal1 WINEARCH=win64 wine start /wait Z:\\root\\vc_redist.x64.exe /q /norestart \
+    && WINEPREFIX=/root/.wine-mt5-terminal1 WINEARCH=win64 wine /root/vc_redist.x64.exe /q /norestart \
     && WINEPREFIX=/root/.wine-mt5-terminal1 wineserver -w \
     && rm /root/vc_redist.x64.exe \
     && echo "[build] VC++ runtime installation complete."
