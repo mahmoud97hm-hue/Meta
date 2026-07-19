@@ -77,14 +77,13 @@ RUN echo "[build] Downloading MT5 portable from MediaFire..." \
     && rm /tmp/mt5_portable.zip \
     && echo "[build] MT5 portable deployment complete."
 
-# ---- install Visual C++ runtime via winetricks (required by modern MT5) ----
-RUN apt-get update && apt-get install -y --no-install-recommends winetricks \
-    && rm -rf /var/lib/apt/lists/* \
-    && echo "[build] Installing VC++ runtime into Wine prefix..." \
-    && Xvfb :99 -screen 0 1024x768x16 & \
-    sleep 1 \
-    && export DISPLAY=:99 \
-    && WINEPREFIX=/root/.wine-mt5-terminal1 WINEARCH=win64 winetricks -q vcrun2022 \
+# ---- install Visual C++ 2015-2022 redistributable (required by modern MT5) ----
+RUN echo "[build] Downloading VC++ redistributable..." \
+    && curl -L -o /tmp/vc_redist.x64.exe "https://aka.ms/vs/17/release/vc_redist.x64.exe" \
+    && echo "[build] Installing VC++ redistributable into Wine prefix..." \
+    && xvfb-run -a wine /tmp/vc_redist.x64.exe /q /norestart \
+    && wineserver -w \
+    && rm /tmp/vc_redist.x64.exe \
     && echo "[build] VC++ runtime installation complete."
 
 # ---- application code ----
